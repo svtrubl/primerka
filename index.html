@@ -89,7 +89,6 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:8px;font-size:14px;z-index:50;max-width:calc(100% - 32px)}
 
 /* AR overlay (sits over the live camera, one look in both themes) */
-.xr-canvas{position:fixed;inset:0;z-index:-1}
 #xrOverlay{position:fixed;inset:0;z-index:100;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;
   padding:calc(12px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));color:var(--ov-fg);font-family:var(--f-body)}
 #xrOverlay > *{pointer-events:auto}
@@ -204,7 +203,6 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 (() => {
 const $ = s => document.querySelector(s);
@@ -426,7 +424,7 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platfor
 async function checkXR(){
   const st = $('#arStatus'), btn = $('#arStart');
   let ok = false;
-  try { ok = !!(navigator.xr && window.THREE && await navigator.xr.isSessionSupported('immersive-ar')); } catch(e){ ok = false; }
+  try { ok = !!(navigator.xr && await navigator.xr.isSessionSupported('immersive-ar')); } catch(e){ ok = false; }
   if (ok){ btn.disabled = false; st.dataset.state = 'ok'; st.textContent = 'Телефон поддерживает примерку через камеру.'; return; }
   st.dataset.state = 'off';
   let embedded = false; try { embedded = window.top !== window.self; } catch(e){ embedded = true; }
@@ -435,143 +433,208 @@ async function checkXR(){
     : 'Этот браузер не поддерживает AR. Нужен Chrome на Android-телефоне с «Сервисами Google Play для AR».';
 }
 
-let renderer, scene, camera, session, refSpace, hitSource, wallRing, floorRing, shadowTex;
-let testCube = null, dbg = {hits:0, kind:'—', frames:0, tris:0}, viewerSpace = null, hitPending = false, aimState = null, hangH = 1.5, infoAt = 0, active = null, placed = [], floorY = null, lastHit = null, lastView = null, hintKey = '';
-const M = window.THREE ? new THREE.Matrix4() : null;
-const V = window.THREE ? {pos:new THREE.Vector3(), n:new THREE.Vector3(), q:new THREE.Quaternion(), s:new THREE.Vector3(), cam:new THREE.Vector3(), tmp:new THREE.Vector3()} : null;
+/* AR rendering: plain WebGL + XRWebGLLayer (no library) */
+let gl = null, U = {}, MESH = {}, whiteTex = null, shadowTex = null, ringTex = null, isGL2 = false;
+let session = null, refSpace = null, viewerSpace = null, xrLayer = null, hitSource = null, hitPending = false, aimState = null;
+let active = null, placed = [], floorY = null, lastHit = null, lastView = null, hintKey = '', hangH = 1.5, infoAt = 0;
+let testCube = null, ring = {wall:null, floor:null};
+const dbg = {hits:0, kind:'—', frames:0, draws:0};
 const texCache = new Map();
 
-function makeShadowTex(){
-  const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
-  x.shadowColor = 'rgba(0,0,0,1)'; x.shadowBlur = 28; x.fillStyle = 'rgba(0,0,0,1)'; x.fillRect(38,38,180,180);
-  const t = new THREE.CanvasTexture(c); return t;
+const v3 = {
+  add:(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]], sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],
+  scale:(a,s)=>[a[0]*s,a[1]*s,a[2]*s], dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+  cross:(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]],
+  len:a=>Math.hypot(a[0],a[1],a[2]), norm:a=>{ const l = Math.hypot(a[0],a[1],a[2]) || 1; return [a[0]/l,a[1]/l,a[2]/l]; }
+};
+function qRot(q, v){
+  const ix = q.w*v[0] + q.y*v[2] - q.z*v[1], iy = q.w*v[1] + q.z*v[0] - q.x*v[2], iz = q.w*v[2] + q.x*v[1] - q.y*v[0], iw = -q.x*v[0] - q.y*v[1] - q.z*v[2];
+  return [ix*q.w + iw*-q.x + iy*-q.z - iz*-q.y, iy*q.w + iw*-q.y + iz*-q.x - ix*-q.z, iz*q.w + iw*-q.z + ix*-q.y - iy*-q.x];
 }
-function initThree(){
-  renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
-  renderer.setPixelRatio(window.devicePixelRatio); renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.xr.enabled = true; renderer.domElement.className = 'xr-canvas'; document.body.appendChild(renderer.domElement);
-  scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 40);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x777777, 1.0));
-  const d = new THREE.DirectionalLight(0xffffff, 0.5); d.position.set(0.4, 1, 0.7); scene.add(d);
-  const ringMat = c => new THREE.MeshBasicMaterial({color:c, transparent:true, opacity:.9, depthTest:false});
-  wallRing = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.08, 40), ringMat(0xffffff));
-  floorRing = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.08, 40).rotateX(-Math.PI/2), ringMat(0xffc94d));
-  wallRing.renderOrder = floorRing.renderOrder = 10; wallRing.visible = floorRing.visible = false; floorRing.matrixAutoUpdate = false;
-  scene.add(wallRing, floorRing); shadowTex = makeShadowTex();
+function mMul(a, b){ const o = new Float32Array(16); for (let c=0;c<4;c++) for (let r=0;r<4;r++){ let s=0; for (let k=0;k<4;k++) s += a[k*4+r]*b[c*4+k]; o[c*4+r] = s; } return o; }
+function mBasis(pos, n){ const x = v3.norm(v3.cross([0,1,0], n)); return new Float32Array([x[0],x[1],x[2],0, 0,1,0,0, n[0],n[1],n[2],0, pos[0],pos[1],pos[2],1]); }
+function mTS(tx,ty,tz, sx,sy,sz){ return new Float32Array([sx,0,0,0, 0,sy,0,0, 0,0,sz,0, tx,ty,tz,1]); }
+const ROT_FLOOR = new Float32Array([1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]);
+const hexRgb = h => [parseInt(h.slice(1,3),16)/255, parseInt(h.slice(3,5),16)/255, parseInt(h.slice(5,7),16)/255];
+
+function initGL(){
+  const c = document.createElement('canvas');
+  gl = c.getContext('webgl2', {xrCompatible:true, alpha:true, antialias:false});
+  isGL2 = !!gl;
+  if (!gl) gl = c.getContext('webgl', {xrCompatible:true, alpha:true, antialias:false});
+  if (!gl) throw new Error('WebGL недоступен');
+  const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, `
+    attribute vec3 aPos; attribute vec3 aNor; attribute vec2 aUv;
+    uniform mat4 uP; uniform mat4 uV; uniform mat4 uM;
+    varying vec2 vUv; varying float vL;
+    void main(){ vUv = aUv; vec3 n = normalize((uM * vec4(aNor, 0.0)).xyz);
+      vL = 0.7 + 0.3 * max(dot(n, normalize(vec3(0.3, 0.8, 0.5))), 0.0);
+      gl_Position = uP * uV * uM * vec4(aPos, 1.0); }`));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, `
+    precision mediump float; varying vec2 vUv; varying float vL;
+    uniform sampler2D uT; uniform vec4 uC; uniform float uLit;
+    void main(){ vec4 t = texture2D(uT, vUv) * uC; gl_FragColor = vec4(t.rgb * mix(1.0, vL, uLit), t.a); }`));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  ['uP','uV','uM','uT','uC','uLit'].forEach(n => U[n] = gl.getUniformLocation(prog, n));
+  U.aPos = gl.getAttribLocation(prog, 'aPos'); U.aNor = gl.getAttribLocation(prog, 'aNor'); U.aUv = gl.getAttribLocation(prog, 'aUv');
+  const mk = (P, I) => { const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(P), gl.STATIC_DRAW);
+    const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(I), gl.STATIC_DRAW); return {vb, ib, n:I.length}; };
+  MESH.quad = mk([-.5,-.5,0, 0,0,1, 0,0,  .5,-.5,0, 0,0,1, 1,0,  .5,.5,0, 0,0,1, 1,1,  -.5,.5,0, 0,0,1, 0,1], [0,1,2, 0,2,3]);
+  const P = [], I = [];
+  [[0,0,1],[0,0,-1],[1,0,0],[-1,0,0],[0,1,0],[0,-1,0]].forEach(n => {
+    const u = Math.abs(n[1]) > .5 ? [1,0,0] : [0,1,0]; const w = v3.cross(n, u); const b = P.length/8;
+    [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([a,c]) => P.push(.5*(n[0]+a*w[0]+c*u[0]), .5*(n[1]+a*w[1]+c*u[1]), .5*(n[2]+a*w[2]+c*u[2]), n[0],n[1],n[2], (a+1)/2,(c+1)/2));
+    I.push(b,b+1,b+2, b,b+2,b+3);
+  });
+  MESH.cube = mk(P, I);
+  gl.uniform1i(U.uT, 0); gl.activeTexture(gl.TEXTURE0);
+  gl.enable(gl.BLEND); gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.disable(gl.CULL_FACE);
+  const w1 = document.createElement('canvas'); w1.width = w1.height = 2; const wx = w1.getContext('2d'); wx.fillStyle = '#fff'; wx.fillRect(0,0,2,2); whiteTex = makeTex(w1);
+  const s = document.createElement('canvas'); s.width = s.height = 256; const sx = s.getContext('2d');
+  sx.shadowColor = '#000'; sx.shadowBlur = 28; sx.fillStyle = '#000'; sx.fillRect(38,38,180,180); shadowTex = makeTex(s);
+  const r = document.createElement('canvas'); r.width = r.height = 128; const rx = r.getContext('2d');
+  rx.strokeStyle = '#fff'; rx.lineWidth = 14; rx.beginPath(); rx.arc(64,64,52,0,Math.PI*2); rx.stroke(); ringTex = makeTex(r);
 }
-async function textureFor(p){
-  if (texCache.has(p.img)) return texCache.get(p.img);
-  const im = await getImg(p.img); const t = new THREE.Texture(im); t.needsUpdate = true; t.anisotropy = 4;
-  texCache.set(p.img, t); return t;
+function makeTex(src){
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
 }
-function buildGroup(p, tex){
-  const g = new THREE.Group(); const f = FRAMES[p.frame] || FRAMES.none; const o = outer(p); const cm = 0.01; const depth = f.w ? 0.03 : 0.02;
-  const shMat = new THREE.MeshBasicMaterial({map:shadowTex, transparent:true, depthWrite:false, opacity:.5}); shMat.userData.base = .5;
-  const sh = new THREE.Mesh(new THREE.PlaneGeometry(o.w*cm*1.3, o.h*cm*1.3), shMat); sh.position.set(0, -o.h*cm*0.025, 0.002); g.add(sh);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(o.w*cm, o.h*cm, depth), new THREE.MeshStandardMaterial({color:new THREE.Color(f.color || '#2a2a2a'), roughness:.75}));
-  body.position.z = depth/2; g.add(body);
-  if (f.mat){ const m = new THREE.Mesh(new THREE.PlaneGeometry((p.w + 2*f.mat)*cm, (p.h + 2*f.mat)*cm), new THREE.MeshBasicMaterial({color:0xf4f3ef})); m.position.z = depth + 0.0008; g.add(m); }
-  const pic = new THREE.Mesh(new THREE.PlaneGeometry(p.w*cm, p.h*cm), new THREE.MeshBasicMaterial({map:tex})); pic.position.z = depth + 0.0016; g.add(pic);
-  g.userData.p = p; g.visible = false; return g;
+function drawMesh(mesh, model, tex, color, lit){
+  gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vb); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib);
+  gl.enableVertexAttribArray(U.aPos); gl.vertexAttribPointer(U.aPos, 3, gl.FLOAT, false, 32, 0);
+  if (U.aNor >= 0){ gl.enableVertexAttribArray(U.aNor); gl.vertexAttribPointer(U.aNor, 3, gl.FLOAT, false, 32, 12); }
+  gl.enableVertexAttribArray(U.aUv); gl.vertexAttribPointer(U.aUv, 2, gl.FLOAT, false, 32, 24);
+  gl.uniformMatrix4fv(U.uM, false, model); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform4fv(U.uC, color); gl.uniform1f(U.uLit, lit);
+  gl.drawElements(gl.TRIANGLES, mesh.n, gl.UNSIGNED_SHORT, 0); dbg.draws++;
 }
-function setOpacity(g, o){
-  g.traverse(m => { if (!m.material) return; const b = m.material.userData.base || 1; m.material.transparent = o < 1 || b < 1; m.material.opacity = o*b; m.material.needsUpdate = true; });
+function drawPainting(o){
+  if (!o.visible) return;
+  const p = o.p, f = FRAMES[p.frame] || FRAMES.none, ou = outer(p), cm = 0.01, op = o.opacity;
+  const ow = ou.w*cm, oh = ou.h*cm, depth = f.w ? 0.03 : 0.02, base = mBasis(o.pos, o.n);
+  gl.depthMask(false);
+  drawMesh(MESH.quad, mMul(base, mTS(0, -oh*0.025, 0.002, ow*1.3, oh*1.3, 1)), shadowTex, [1,1,1,0.5*op], 0);
+  gl.depthMask(true);
+  drawMesh(MESH.cube, mMul(base, mTS(0, 0, depth/2, ow, oh, depth)), whiteTex, [...hexRgb(f.color || '#2a2a2a'), op], 1);
+  if (f.mat) drawMesh(MESH.quad, mMul(base, mTS(0, 0, depth + 0.0008, (p.w + 2*f.mat)*cm, (p.h + 2*f.mat)*cm, 1)), whiteTex, [0.957,0.953,0.937,op], 0);
+  drawMesh(MESH.quad, mMul(base, mTS(0, 0, depth + 0.0016, p.w*cm, p.h*cm, 1)), o.tex || whiteTex, [1,1,1,op], 0);
 }
-async function startAiming(p){
-  const tex = await textureFor(p);
-  if (active){ scene.remove(active); }
-  active = buildGroup(p, tex); setOpacity(active, .6); scene.add(active); updateXrInfo(); renderXrStrip();
+function drawScene(){
+  gl.enable(gl.DEPTH_TEST);
+  placed.forEach(drawPainting);
+  if (testCube) drawMesh(MESH.cube, mTS(testCube[0], testCube[1], testCube[2], .15, .15, .15), whiteTex, [1, 0, .8, 1], 1);
+  if (active) drawPainting(active);
+  gl.disable(gl.DEPTH_TEST);
+  if (ring.wall) drawMesh(MESH.quad, mMul(mBasis(ring.wall.pos, ring.wall.n), mTS(0,0,0, .16,.16,1)), ringTex, [1,1,1,.9], 0);
+  if (ring.floor) drawMesh(MESH.quad, mMul(ring.floor, mMul(ROT_FLOOR, mTS(0,0,0, .16,.16,1))), ringTex, [1,.79,.3,.9], 0);
 }
-function placeActive(){
-  if (!active) return; setOpacity(active, 1); placed.push(active); active = null; hintKey = ''; updateXrInfo();
+
+function texFor(o){
+  const src = o.p.img;
+  if (texCache.has(src)){ o.tex = texCache.get(src); return; }
+  getImg(src).then(im => { if (!gl) return; const t = texCache.get(src) || makeTex(im); texCache.set(src, t); o.tex = t; }).catch(() => {});
 }
-function orient(g, pos, n){ g.position.copy(pos).addScaledVector(n, 0.004); V.tmp.copy(g.position).add(n); g.lookAt(V.tmp); g.visible = true; }
+function startAiming(p){
+  active = {p, tex:null, pos:[0,0,0], n:[0,0,1], visible:false, opacity:.6}; texFor(active);
+  hintKey = ''; updateXrInfo(); renderXrStrip();
+}
+function placeAt(o, pos, n){ o.pos = v3.add(pos, v3.scale(n, 0.004)); o.n = n; o.visible = true; }
+function placeActive(){ if (!active) return; active.opacity = 1; placed.push(active); active = null; hintKey = ''; updateXrInfo(); renderXrStrip(); }
 function setHint(key, text){ if (key === hintKey) return; hintKey = key; $('#xrHint').textContent = text; }
+function setAim(st){ if (st === aimState) return; aimState = st; $('#xrAim').dataset.state = st; }
 function heightText(g){
   if (!g) return '';
   if (floorY === null) return 'Покажите камере пол на пару секунд, и я посчитаю высоту.';
-  const c = Math.round((g.position.y - floorY)*100);
-  return 'Центр на высоте <span class="mono">' + c + ' см</span> от пола. Обычно вешают на 145–155 см.';
+  return 'Центр на высоте <span class="mono">' + Math.round((g.pos[1] - floorY)*100) + ' см</span> от пола. Обычно вешают на 145–155 см.';
 }
 function updateXrInfo(){
   const g = active || placed[placed.length-1]; const el = $('#xrInfo');
   if (!g){ el.innerHTML = 'Выберите картину ниже.'; return; }
-  const p = g.userData.p; const o = outer(p);
+  const o = outer(g.p);
   el.innerHTML = '<b></b> · <span class="mono">' + fmt(o.w) + ' × ' + fmt(o.h) + ' см</span><br>' + heightText(g);
-  el.querySelector('b').textContent = p.name;
+  el.querySelector('b').textContent = g.p.name;
 }
-function setAim(st){ if (st === aimState) return; aimState = st; $('#xrAim').dataset.state = st; }
-function onFrame(t, frame){
-  if (frame && !hitSource && !hitPending && viewerSpace){
-    const vp0 = frame.getViewerPose(refSpace);
-    if (vp0 && vp0.views.length){
-      hitPending = true; const sess = frame.session;
-      const dy = -0.2 / vp0.views[0].projectionMatrix[5];
-      let req;
-      try { req = sess.requestHitTestSource({space:viewerSpace, offsetRay:new XRRay({x:0,y:0,z:0,w:1}, {x:0,y:dy,z:-1,w:0})}); $('#xrAim').style.top = '60%'; }
-      catch(e){ req = Promise.reject(e); }
-      req.then(h => { hitSource = h; }).catch(() => { $('#xrAim').style.top = '50%'; return sess.requestHitTestSource({space:viewerSpace}).then(h => { hitSource = h; }); });
-    }
-  }
-  if (frame && hitSource){
-    const vp = frame.getViewerPose(refSpace);
-    if (vp){ const tp = vp.transform.position, to = vp.transform.orientation; lastView = {pos:new THREE.Vector3(tp.x,tp.y,tp.z), q:new THREE.Quaternion(to.x,to.y,to.z,to.w)}; }
+function rel(pos){
+  const d = qRot({x:-lastView.q.x, y:-lastView.q.y, z:-lastView.q.z, w:lastView.q.w}, v3.sub(pos, lastView.pos));
+  return 'вправо ' + d[0].toFixed(2) + ', вверх ' + d[1].toFixed(2) + ', вперёд ' + (-d[2]).toFixed(2) + ' м (до неё ' + v3.len(d).toFixed(2) + ' м)';
+}
+function updateDebug(){
+  const g = active || placed[placed.length-1]; const el = $('#xrDebug');
+  if (!lastView){ el.textContent = 'нет позиции телефона'; return; }
+  let txt = 'WebGL' + (isGL2 ? '2' : '1') + ' · кадров ' + dbg.frames + ' · отрисовок ' + dbg.draws + ' · попаданий ' + dbg.hits + ' (' + dbg.kind + ')';
+  txt += '\nкубик: ' + (testCube ? rel(testCube) : 'нет');
+  txt += '\nкартина: ' + (g ? rel(g.pos) + ' · видна ' + (g.visible ? 'да' : 'нет') + ' · висит ' + placed.length : 'нет');
+  txt += '\nпол: ' + (floorY === null ? 'не найден' : 'на ' + (lastView.pos[1] - floorY).toFixed(2) + ' м ниже телефона');
+  el.textContent = txt;
+}
+function requestHit(s, vp){
+  hitPending = true;
+  let req;
+  try { const dy = -0.2 / vp.views[0].projectionMatrix[5];
+    req = s.requestHitTestSource({space:viewerSpace, offsetRay:new XRRay({x:0,y:0,z:0,w:1}, {x:0,y:dy,z:-1,w:0})}); $('#xrAim').style.top = '60%'; }
+  catch(e){ req = Promise.reject(e); }
+  req.then(h => { hitSource = h; }).catch(() => { $('#xrAim').style.top = '50%'; return s.requestHitTestSource({space:viewerSpace}).then(h => { hitSource = h; }); });
+}
+function onXRFrame(t, frame){
+  const s = frame.session; s.requestAnimationFrame(onXRFrame);
+  const vp = frame.getViewerPose(refSpace);
+  if (vp){ const tp = vp.transform.position, to = vp.transform.orientation; lastView = {pos:[tp.x,tp.y,tp.z], q:{x:to.x,y:to.y,z:to.z,w:to.w}}; }
+  if (vp && !hitSource && !hitPending && viewerSpace) requestHit(s, vp);
+  if (vp && !testCube) testCube = v3.add(lastView.pos, v3.scale(qRot(lastView.q, [0,0,-1]), 1));
+  if (hitSource && lastView){
     const res = frame.getHitTestResults(hitSource);
-    wallRing.visible = false; floorRing.visible = false; lastHit = null;
+    ring.wall = null; ring.floor = null; lastHit = null;
     let wall = null, floor = null;
-    if (lastView){
-      for (const r of res){
-        const pose = r.getPose(refSpace); if (!pose) continue;
-        M.fromArray(pose.transform.matrix); M.decompose(V.pos, V.q, V.s); V.n.set(0,1,0).applyQuaternion(V.q);
-        if (Math.abs(V.n.y) < 0.45){ wall = {pos:V.pos.clone(), n:V.n.clone()}; break; }
-        if (!floor && V.n.y > 0.75 && V.pos.y < lastView.pos.y - 0.5) floor = {pos:V.pos.clone(), m:M.clone()};
-      }
+    for (const r of res){
+      const pose = r.getPose(refSpace); if (!pose) continue;
+      const m = pose.transform.matrix, pos = [m[12], m[13], m[14]], n = [m[4], m[5], m[6]];
+      if (Math.abs(n[1]) < 0.45){ wall = {pos, n}; break; }
+      if (!floor && n[1] > 0.75 && pos[1] < lastView.pos[1] - 0.5) floor = {pos, m:new Float32Array(m)};
     }
     dbg.hits = res.length; dbg.kind = wall ? 'стена' : floor ? 'пол' : res.length ? 'другое' : 'нет';
     setAim(wall ? 'wall' : floor ? 'floor' : '');
     if (wall){
-      wall.n.y = 0; wall.n.normalize(); V.cam.copy(lastView.pos).sub(wall.pos); if (wall.n.dot(V.cam) < 0) wall.n.negate();
-      lastHit = {kind:'wall', pos:wall.pos, n:wall.n};
-      V.tmp.copy(wall.pos).addScaledVector(wall.n, 0.006); wallRing.position.copy(V.tmp); V.tmp.add(wall.n); wallRing.lookAt(V.tmp); wallRing.visible = true;
-      if (active){ orient(active, wall.pos, wall.n); setHint('wall', 'Стена найдена. Нажмите на экран, чтобы повесить'); }
+      let n = v3.norm([wall.n[0], 0, wall.n[2]]); if (v3.dot(n, v3.sub(lastView.pos, wall.pos)) < 0) n = v3.scale(n, -1);
+      lastHit = {kind:'wall', pos:wall.pos, n}; ring.wall = {pos:v3.add(wall.pos, v3.scale(n, 0.006)), n};
+      if (active){ placeAt(active, wall.pos, n); setHint('wall', 'Стена найдена. Нажмите на экран, чтобы повесить'); }
       else setHint('wall-idle', 'Картина висит. «Выше» и «Ниже» двигают её на 5 см');
     } else if (floor){
-      floorY = floorY === null ? floor.pos.y : floorY*0.9 + floor.pos.y*0.1;
-      floorRing.matrix.copy(floor.m); floorRing.visible = true;
-      const n = lastView.pos.clone().sub(floor.pos); n.y = 0;
-      if (n.lengthSq() > 1e-4){
-        n.normalize(); lastHit = {kind:'floor', pos:floor.pos, n};
-        if (active){ const top = floor.pos.clone(); top.y += hangH; orient(active, top, n); setHint('floor', 'Поставьте прицел на пол у самой стены и нажмите на экран'); }
+      floorY = floorY === null ? floor.pos[1] : floorY*0.9 + floor.pos[1]*0.1;
+      ring.floor = floor.m;
+      const d = v3.sub(lastView.pos, floor.pos); d[1] = 0;
+      if (v3.len(d) > 0.01){
+        const n = v3.norm(d); lastHit = {kind:'floor', pos:floor.pos, n};
+        if (active){ placeAt(active, [floor.pos[0], floor.pos[1] + hangH, floor.pos[2]], n); setHint('floor', 'Поставьте прицел на пол у самой стены и нажмите на экран'); }
         else setHint('floor-idle', 'Картина висит. «Выше» и «Ниже» двигают её на 5 см');
       }
     } else {
       setHint(res.length ? 'other' : 'none', res.length ? 'Наведите прицел на пол у самой стены' : 'Наведите прицел на пол и медленно поводите телефоном');
     }
     if (active && !lastHit) active.visible = false;
-    if (lastView && !testCube){
-      testCube = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.15,0.15), new THREE.MeshBasicMaterial({color:0xff00cc}));
-      const f = new THREE.Vector3(0,0,-1).applyQuaternion(lastView.q); testCube.position.copy(lastView.pos).addScaledVector(f, 1); scene.add(testCube);
-    }
-    if (t - infoAt > 500){ infoAt = t; updateXrInfo(); updateDebug(); }
   }
-  renderer.render(scene, camera);
-  dbg.frames++; dbg.tris = renderer.info.render.triangles;
-}
-function rel(g){
-  const d = g.position.clone().sub(lastView.pos).applyQuaternion(lastView.q.clone().invert());
-  return 'вправо ' + d.x.toFixed(2) + ', вверх ' + d.y.toFixed(2) + ', вперёд ' + (-d.z).toFixed(2) + ' м (до неё ' + d.length().toFixed(2) + ' м)';
-}
-function updateDebug(){
-  const g = active || placed[placed.length-1]; const el = $('#xrDebug'); if (!lastView){ el.textContent = 'нет позиции телефона'; return; }
-  let txt = 'r' + THREE.REVISION + ' · кадров ' + dbg.frames + ' · треуг. ' + dbg.tris + ' · попаданий ' + dbg.hits + ' (' + dbg.kind + ')';
-  txt += '\nкубик: ' + (testCube ? rel(testCube) : 'нет');
-  txt += '\nкартина: ' + (g ? rel(g) + ' · видна ' + (g.visible ? 'да' : 'нет') + ' · висит ' + placed.length : 'нет');
-  txt += '\nпол: ' + (floorY === null ? 'не найден' : 'на ' + (lastView.pos.y - floorY).toFixed(2) + ' м ниже телефона');
-  el.textContent = txt;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer);
+  gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  dbg.draws = 0;
+  if (vp) for (const view of vp.views){
+    const v = xrLayer.getViewport(view); gl.viewport(v.x, v.y, v.width, v.height);
+    gl.uniformMatrix4fv(U.uP, false, view.projectionMatrix); gl.uniformMatrix4fv(U.uV, false, view.transform.inverse.matrix);
+    drawScene();
+  }
+  dbg.frames++;
+  if (t - infoAt > 500){ infoAt = t; updateXrInfo(); updateDebug(); }
 }
 function renderXrStrip(){
   const s = $('#xrStrip'); if (!s) return; s.textContent = '';
-  const ap = active && active.userData.p;
+  const ap = active && active.p;
   state.paintings.forEach(p => {
     const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-label', p.name); b.setAttribute('aria-pressed', ap === p);
     const im = document.createElement('img'); im.src = p.img; im.alt = ''; b.appendChild(im);
@@ -579,7 +642,6 @@ function renderXrStrip(){
   });
 }
 async function startAR(){
-  if (!renderer) initThree();
   const overlay = $('#xrOverlay'); overlay.hidden = false;
   try {
     session = await navigator.xr.requestSession('immersive-ar', {requiredFeatures:['hit-test'], optionalFeatures:['dom-overlay'], domOverlay:{root:overlay}});
@@ -587,44 +649,49 @@ async function startAR(){
     overlay.hidden = true; session = null;
     toast('Камера не запустилась. Проверьте, что Chrome разрешён доступ к камере и установлены «Сервисы Google Play для AR».'); return;
   }
-  renderer.xr.setReferenceSpaceType('local');
-  await renderer.xr.setSession(session);
-  refSpace = renderer.xr.getReferenceSpace();
-  viewerSpace = await session.requestReferenceSpace('viewer');
-  hitSource = null; hitPending = false; setAim('');
+  try {
+    if (!gl) initGL();
+    if (gl.makeXRCompatible) await gl.makeXRCompatible();
+    xrLayer = new XRWebGLLayer(session, gl, {alpha:true, antialias:true});
+    session.updateRenderState({baseLayer:xrLayer});
+    refSpace = await session.requestReferenceSpace('local');
+    viewerSpace = await session.requestReferenceSpace('viewer');
+  } catch(e){
+    toast('Не удалось запустить графику: ' + (e && e.message || e)); try { session.end(); } catch(_){} return;
+  }
+  hitSource = null; hitPending = false; aimState = null; setAim(''); floorY = null; hintKey = ''; placed = []; active = null; testCube = null; dbg.frames = 0;
   session.addEventListener('select', () => { if (active && active.visible && lastHit) placeActive(); });
   session.addEventListener('end', onEnd);
-  floorY = null; hintKey = ''; placed = [];
-  renderer.setAnimationLoop(onFrame);
+  session.requestAnimationFrame(onXRFrame);
   const p = cur(); if (p) startAiming(p);
 }
 function onEnd(){
-  renderer.setAnimationLoop(null); hitSource = null; hitPending = false; viewerSpace = null; aimState = null; session = null;
-  if (active) scene.remove(active); placed.forEach(g => scene.remove(g)); active = null; placed = [];
-  if (testCube){ scene.remove(testCube); testCube = null; } dbg.frames = 0;
+  hitSource = null; hitPending = false; viewerSpace = null; aimState = null; session = null; xrLayer = null;
+  active = null; placed = []; testCube = null; lastView = null; ring = {wall:null, floor:null};
   $('#xrOverlay').hidden = true;
 }
 ['#xrPanel', '.xr-top'].forEach(q => $(q).addEventListener('beforexrselect', e => e.preventDefault()));
 $('#arStart').addEventListener('click', startAR);
 $('#xrExit').addEventListener('click', () => { if (session) session.end(); });
-$('#xrFront').addEventListener('click', async () => {
-  if (!lastView) return; if (!active){ const p = (placed.length && placed[placed.length-1].userData.p) || cur(); await startAiming(p); }
-  const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(lastView.q); fwd.y = 0; if (fwd.lengthSq() < 1e-4) fwd.set(0,0,-1); fwd.normalize();
-  const pos = lastView.pos.clone().addScaledVector(fwd, 1.5); pos.y = floorY !== null ? floorY + hangH : lastView.pos.y;
-  orient(active, pos, fwd.clone().negate()); placeActive();
+$('#xrFront').addEventListener('click', () => {
+  if (!lastView) return;
+  if (!active){ const p = (placed.length && placed[placed.length-1].p) || cur(); if (!p) return; startAiming(p); }
+  let fwd = qRot(lastView.q, [0,0,-1]); fwd[1] = 0; fwd = v3.len(fwd) < 0.01 ? [0,0,-1] : v3.norm(fwd);
+  const pos = v3.add(lastView.pos, v3.scale(fwd, 1.5)); pos[1] = floorY !== null ? floorY + hangH : lastView.pos[1];
+  placeAt(active, pos, v3.scale(fwd, -1)); placeActive();
 });
 function nudge(d){
   hangH = Math.max(0.3, Math.min(3, hangH + d));
-  const g = active || placed[placed.length-1]; if (g && !active) g.position.y += d;
+  if (!active && placed.length) placed[placed.length-1].pos[1] += d;
   updateXrInfo();
 }
 $('#xrUp').addEventListener('click', () => nudge(0.05));
 $('#xrDown').addEventListener('click', () => nudge(-0.05));
 $('#xrMove').addEventListener('click', () => {
-  if (active || !placed.length) return; active = placed.pop(); setOpacity(active, .6); hintKey = ''; updateXrInfo(); renderXrStrip();
+  if (active || !placed.length) return; active = placed.pop(); active.opacity = .6; hintKey = ''; updateXrInfo(); renderXrStrip();
 });
 $('#xrRemove').addEventListener('click', () => {
-  if (active){ scene.remove(active); active = null; } else if (placed.length){ scene.remove(placed.pop()); }
+  if (active) active = null; else if (placed.length) placed.pop();
   hintKey = ''; updateXrInfo(); renderXrStrip();
 });
 
