@@ -48,6 +48,7 @@
           <label class="btn" for="roomFile">Загрузить фото комнаты</label>
           <input type="file" id="roomFile" accept="image/*">
           <button class="btn" id="calibBtn">Задать масштаб</button>
+          <button class="btn primary" id="shareBtn">Поделиться</button>
           <button class="btn ghost" id="saveBtn">Сохранить картинку</button>
         </div>
         <form id="calibForm" hidden>
@@ -81,6 +82,23 @@
       <button class="xr-btn" id="xrUp">↑ Выше</button>
       <button class="xr-btn" id="xrDown">↓ Ниже</button>
     </div>
-    <button class="xr-btn" id="xrReset">Поставить точки заново</button>
+    <div class="xr-row2">
+      <button class="xr-btn" id="xrReset">Поставить точки заново</button>
+      <button class="xr-btn xr-share" id="xrShare" disabled>Поделиться</button>
+    </div>
   </div>
 </div>
+
+<dialog id="shareDlg" aria-labelledby="shareTitle">
+  <form method="dialog" class="share-box">
+    <h2 id="shareTitle">Картина у тебя на стене</h2>
+    <img id="shareImg" alt="Снимок комнаты с картиной">
+    <p class="note" id="shareNote"></p>
+    <div class="row">
+      <button class="btn primary" type="button" id="shareGo">Поделиться</button>
+      <button class="btn" type="button" id="shareSave">Сохранить картинку</button>
+      <button class="btn" type="button" id="shareCopy">Скопировать ссылку</button>
+    </div>
+    <button class="btn ghost share-close" value="close">Закрыть</button>
+  </form>
+</dialog>

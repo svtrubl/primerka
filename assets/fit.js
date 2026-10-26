@@ -177,18 +177,87 @@ $('#calibForm').addEventListener('submit', e => { e.preventDefault(); const cm =
   ph.pxPerCm = d / cm; ph.approx = false; ph.scaleSrc = 'по отметке ' + fmt(cm) + ' см'; ph.pos = {x:(ph.pts[0].x+ph.pts[1].x)/2/cv.width, y:Math.max(.15,(ph.pts[0].y+ph.pts[1].y)/2/cv.height - .25)};
   $('#calibCm').value = ''; stopCalib(); updateScaleNote(); toast('Масштаб задан.'); });
 $('#fine').addEventListener('input', e => { ph.fine = e.target.value/100; $('#fineOut').textContent = e.target.value + '%'; drawPhoto(); });
-$('#saveBtn').addEventListener('click', async () => {
-  const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.9));
-  if (!blob){ toast('Не получилось подготовить картинку.'); return; }
+function saveBlob(blob){
   if (window.claude && window.claude.use){
-    let dl = null; try { dl = await window.claude.use('downloads'); } catch(e){}
-    if (!dl){ toast('Здесь сохранение недоступно. Сделайте скриншот экрана.'); return; }
-    try { await dl.save({filename:'primerka.jpg', data:blob}); }
-    catch(err){ if (err && err.code !== 'declined') toast('Не удалось сохранить. Сделайте скриншот экрана.'); }
+    (async () => {
+      let dl = null; try { dl = await window.claude.use('downloads'); } catch(e){}
+      if (!dl){ toast('Здесь сохранение недоступно. Сделайте скриншот экрана.'); return; }
+      try { await dl.save({filename:'primerka.jpg', data:blob}); }
+      catch(err){ if (err && err.code !== 'declined') toast('Не удалось сохранить. Сделайте скриншот экрана.'); }
+    })();
     return;
   }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'primerka.jpg'; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+$('#saveBtn').addEventListener('click', async () => {
+  const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.9));
+  if (!blob){ toast('Не получилось подготовить картинку.'); return; }
+  saveBlob(blob);
+});
+
+/* ---------- «Поделиться»: снимок с подписью и ссылкой на примерку этой картины ---------- */
+function shareUrl(p){
+  const page = (/^https:/.test(location.protocol) && !embeddedCheck()) ? location.href.split(/[?#]/)[0] : SITE_URL;
+  return p ? page + '?work=' + encodeURIComponent(p.id) : page;
+}
+function fitText(x, text, maxW, size, font){
+  let s = size; x.font = font(s);
+  while (s > 10 && x.measureText(text).width > maxW){ s -= 1; x.font = font(s); }
+}
+function composeShare(src, p){
+  const W = src.width, H = src.height, band = Math.round(Math.max(110, W * 0.1));
+  const c = document.createElement('canvas'); c.width = W; c.height = H + band;
+  const x = c.getContext('2d');
+  x.drawImage(src, 0, 0);
+  x.fillStyle = '#221D2A'; x.fillRect(0, H, W, band);
+  const pad = Math.round(band * 0.3), maxW = W - 2 * pad;
+  const title = '«' + p.name + '», ' + fmt(p.w) + ' × ' + fmt(p.h) + ' см';
+  x.fillStyle = '#FFFFFF'; fitText(x, title, maxW, Math.round(band * 0.27), s => s + 'px Prata, Georgia, serif');
+  x.fillText(title, pad, H + band * 0.47);
+  x.fillStyle = 'rgba(255,255,255,.72)';
+  const link = 'Примерь у себя: ' + shareUrl(p).replace(/^https?:\/\//, '');
+  fitText(x, link, maxW, Math.round(band * 0.17), s => '500 ' + s + 'px Manrope, sans-serif');
+  x.fillText(link, pad, H + band * 0.8);
+  return c;
+}
+let shareState = null;
+async function openShare(src, p){
+  if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch(e){} }
+  const c = composeShare(src, p);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+  if (!blob){ toast('Не получилось подготовить картинку.'); return; }
+  const file = new File([blob], 'primerka.jpg', {type:'image/jpeg'});
+  let canFiles = false; try { canFiles = !!(navigator.canShare && navigator.canShare({files:[file]})); } catch(e){}
+  shareState = {blob, file, p, url:shareUrl(p), canFiles};
+  const img = $('#shareImg'); if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+  img.dataset.url = URL.createObjectURL(blob); img.src = img.dataset.url;
+  $('#shareGo').hidden = !navigator.share;
+  $('#shareNote').textContent = canFiles
+    ? 'Отправь снимок тому, с кем выбираешь картину. Ссылка на примерку уже есть на картинке.'
+    : navigator.share ? 'Этот браузер отправит только ссылку. Чтобы отправить снимок, сохрани картинку.'
+    : 'Сохрани картинку и отправь её в мессенджере или скопируй ссылку на примерку.';
+  const d = $('#shareDlg'); if (d.showModal) d.showModal(); else d.setAttribute('open', '');
+}
+$('#shareGo').addEventListener('click', async () => {
+  if (!shareState) return;
+  const p = shareState.p, title = '«' + p.name + '»';
+  const text = 'Как тебе «' + p.name + '» у меня на стене? Примерь у себя: ' + shareState.url;
+  try {
+    if (shareState.canFiles) await navigator.share({files:[shareState.file], title, text});
+    else await navigator.share({title, text, url:shareState.url});
+  } catch(e){ if (!e || e.name !== 'AbortError') toast('Не получилось поделиться. Сохрани картинку.'); }
+});
+$('#shareSave').addEventListener('click', () => { if (shareState) saveBlob(shareState.blob); });
+$('#shareCopy').addEventListener('click', () => {
+  if (!shareState) return; const url = shareState.url;
+  try { navigator.clipboard.writeText(url).then(() => toast('Ссылка скопирована.'), () => toast(url)); } catch(e){ toast(url); }
+});
+$('#shareDlg .share-close').addEventListener('click', () => { const d = $('#shareDlg'); if (!d.close) d.removeAttribute('open'); });
+$('#shareBtn').addEventListener('click', () => {
+  const p = cur(); if (!p){ toast('Сначала выберите картину.'); return; }
+  if (ph.calib) stopCalib();
+  openShare(cv, p);
 });
 
 /* ---------- AR (WebXR) ---------- */
@@ -225,6 +294,7 @@ async function checkXR(){
 
 /* AR rendering: plain WebGL + XRWebGLLayer (no library). Wall is set by two points on the plinth. */
 let gl = null, U = {}, MESH = {}, whiteTex = null, shadowTex = null, ringTex = null;
+let xrBinding = null, captureReq = false, fbo = null;
 let session = null, refSpace = null, viewerSpace = null, xrLayer = null, hitSource = null, hitPending = false, aimState = null;
 let step = 1, A = null, B = null, aim = null, wall = null, painting = null, shift = 0, hangH = 1.5, lastView = null, hintKey = '', infoAt = 0, aimMatrix = null;
 const texCache = new Map();
@@ -335,11 +405,12 @@ function wallFrom(a, c){
   return {mid, dir, n, baseY: mid[1]};
 }
 function wallPos(w, sh){ const p = v3.add(w.mid, v3.scale(w.dir, sh)); p[1] = w.baseY + hangH; return p; }
-function drawScene(){
+function drawScene(clean){
   gl.enable(gl.DEPTH_TEST);
   if (step === 3 && wall && painting) drawPainting(painting, wallPos(wall, shift), wall.n, 1);
   if (step === 2 && aim && painting){ const w = wallFrom(A, aim); if (w) drawPainting(painting, wallPos(w, 0), w.n, .55); }
   gl.disable(gl.DEPTH_TEST);
+  if (clean) return;
   if (A) drawPin(A, GREEN);
   if (B) drawPin(B, GREEN);
   if (step === 2 && A && aim) drawLine(A, aim, [1, .79, .3, .9]);
@@ -355,17 +426,17 @@ function texFor(o){
 function setPainting(p){ painting = {p, tex:null}; texFor(painting); updateXrInfo(); renderXrStrip(); }
 function setHint(key, text){ if (key === hintKey) return; hintKey = key; $('#xrHint').textContent = text; }
 function setAim(st){ if (st === aimState) return; aimState = st; $('#xrAim').dataset.state = st; }
-function flash(text, kind){
+function flash(text, kind, ms){
   const el = $('#xrFlash'); el.textContent = text; el.dataset.kind = kind || 'ok'; el.hidden = false;
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
-  clearTimeout(flash.t); flash.t = setTimeout(() => { el.hidden = true; }, 1800);
+  clearTimeout(flash.t); flash.t = setTimeout(() => { el.hidden = true; }, ms || 1800);
   try { if (navigator.vibrate) navigator.vibrate(kind === 'warn' ? [40, 60, 40] : 35); } catch(e){}
 }
 function updateSteps(){
   const s1 = $('#xrStep1'), s2 = $('#xrStep2');
   s1.dataset.s = step === 1 ? 'current' : 'done'; s2.dataset.s = step === 1 ? 'todo' : step === 2 ? 'current' : 'done';
   s1.querySelector('i').textContent = step > 1 ? '✓' : '1'; s2.querySelector('i').textContent = step > 2 ? '✓' : '2';
-  ['#xrLeft','#xrRight','#xrUp','#xrDown'].forEach(q => $(q).disabled = step !== 3);
+  ['#xrLeft','#xrRight','#xrUp','#xrDown','#xrShare'].forEach(q => $(q).disabled = step !== 3);
 }
 function updateXrInfo(){
   const el = $('#xrInfo'); if (!painting){ el.textContent = 'Выберите картину ниже.'; return; }
@@ -419,6 +490,54 @@ function onXRFrame(t, frame){
     gl.uniformMatrix4fv(U.uP, false, view.projectionMatrix); gl.uniformMatrix4fv(U.uV, false, view.transform.inverse.matrix);
     drawScene();
   }
+  if (captureReq && vp){ captureReq = false; finishCapture(captureFrame(vp.views[0])); }
+}
+
+/* Снимок из камеры вместе с картиной (Chrome: WebXR camera-access).
+   Если телефон не отдаёт кадр камеры, подсказываем сделать скриншот. */
+const IDENT = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+function captureFrame(view){
+  try {
+    if (!xrBinding || !view.camera) return null;
+    const cam = view.camera, tex = xrBinding.getCameraImage(cam);
+    if (!tex) return null;
+    const w = cam.width, h = cam.height;
+    if (!fbo || fbo.w !== w || fbo.h !== h){
+      const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      const rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+      const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+      fbo = {f, w, h};
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.f); gl.viewport(0, 0, w, h);
+    gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.disable(gl.DEPTH_TEST);
+    gl.uniformMatrix4fv(U.uP, false, IDENT); gl.uniformMatrix4fv(U.uV, false, IDENT);
+    drawMesh(MESH.quad, mTS(0, 0, 0, 2, 2, 1), tex, [1,1,1,1], 0);
+    gl.uniformMatrix4fv(U.uP, false, view.projectionMatrix); gl.uniformMatrix4fv(U.uV, false, view.transform.inverse.matrix);
+    drawScene(true);
+    const px = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d'), id = x.createImageData(w, h), row = w * 4;
+    for (let y = 0; y < h; y++) id.data.set(px.subarray((h - 1 - y) * row, (h - y) * row), y * row);
+    for (let i = 3; i < id.data.length; i += 4) id.data[i] = 255;
+    x.putImageData(id, 0, 0);
+    return c;
+  } catch(e){
+    try { gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer); } catch(_){}
+    return null;
+  }
+}
+function finishCapture(shot){
+  if (!shot){ flash('Сделай скриншот: кнопки питания и громкости вниз вместе', 'warn', 4500); return; }
+  const p = painting && painting.p;
+  if (session) session.end();
+  if (p) openShare(shot, p);
 }
 function renderXrStrip(){
   const s = $('#xrStrip'); if (!s) return; s.textContent = '';
@@ -433,7 +552,7 @@ function resetPoints(){ step = 1; A = null; B = null; wall = null; shift = 0; hi
 async function startAR(){
   const overlay = $('#xrOverlay'); overlay.hidden = false;
   try {
-    session = await navigator.xr.requestSession('immersive-ar', {requiredFeatures:['hit-test'], optionalFeatures:['dom-overlay'], domOverlay:{root:overlay}});
+    session = await navigator.xr.requestSession('immersive-ar', {requiredFeatures:['hit-test'], optionalFeatures:['dom-overlay','camera-access'], domOverlay:{root:overlay}});
   } catch(e){
     overlay.hidden = true; session = null;
     toast('Камера не запустилась. Проверьте, что Chrome разрешён доступ к камере и установлены «Сервисы Google Play для AR».'); return;
@@ -443,6 +562,8 @@ async function startAR(){
     if (gl.makeXRCompatible) await gl.makeXRCompatible();
     xrLayer = new XRWebGLLayer(session, gl, {alpha:true, antialias:true});
     session.updateRenderState({baseLayer:xrLayer});
+    xrBinding = null;
+    try { if (window.XRWebGLBinding) xrBinding = new XRWebGLBinding(session, gl); } catch(e){ xrBinding = null; }
     refSpace = await session.requestReferenceSpace('local');
     viewerSpace = await session.requestReferenceSpace('viewer');
   } catch(e){
@@ -455,7 +576,7 @@ async function startAR(){
   const p = cur(); if (p) setPainting(p);
 }
 function onEnd(){
-  hitSource = null; hitPending = false; viewerSpace = null; aimState = null; session = null; xrLayer = null; lastView = null; painting = null;
+  captureReq = false; xrBinding = null; fbo = null; hitSource = null; hitPending = false; viewerSpace = null; aimState = null; session = null; xrLayer = null; lastView = null; painting = null;
   A = B = wall = aim = aimMatrix = null; step = 1;
   $('#xrOverlay').hidden = true;
 }
@@ -471,6 +592,7 @@ $('#xrLeft').addEventListener('click', () => slide(-0.05));
 $('#xrRight').addEventListener('click', () => slide(0.05));
 $('#xrUp').addEventListener('click', () => { hangH = Math.min(3, hangH + 0.05); updateXrInfo(); });
 $('#xrDown').addEventListener('click', () => { hangH = Math.max(0.3, hangH - 0.05); updateXrInfo(); });
+$('#xrShare').addEventListener('click', () => { if (step === 3) captureReq = true; });
 $('#xrReset').addEventListener('click', () => { resetPoints(); flash('Точки сброшены. Начните с первой', 'warn'); });
 
 /* ---------- boot ---------- */

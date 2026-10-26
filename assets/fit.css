@@ -105,3 +105,15 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 #xrFlash.show{animation:pop .25s ease-out}
 @keyframes pop{from{transform:translate(-50%,-110%) scale(.85);opacity:0}to{transform:translate(-50%,-150%) scale(1);opacity:1}}
 #xrOverlay > #xrAim[data-state="off"]{display:none}
+
+/* «Поделиться»: окно с готовой картинкой и кнопка в режиме камеры */
+.xr-row2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.xr-share:not(:disabled){background:#7B2D4A;border-color:#7B2D4A}
+#shareDlg{border:0;border-radius:16px;padding:0;background:var(--surface);color:var(--ink);
+  width:min(560px,calc(100% - 24px));max-height:calc(100% - 24px)}
+#shareDlg::backdrop{background:rgba(20,16,24,.6)}
+.share-box{display:grid;gap:12px;padding:16px}
+.share-box h2{font:400 22px/1.2 var(--f-display);margin:0}
+.share-box img{width:100%;max-height:60vh;object-fit:contain;border-radius:8px;background:var(--bg)}
+.share-box .note{margin:0}
+.share-close{justify-self:start}
