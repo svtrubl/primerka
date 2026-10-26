@@ -87,7 +87,7 @@ $('#pFrame').addEventListener('change', e => { cur().frame = e.target.value; per
 
 /* ---------- photo mode ---------- */
 const cv = $('#photoCanvas'), ctx = cv.getContext('2d');
-const ph = {room:null, sample:true, pxPerCm:3.2, scaleSrc:'по дивану шириной 200 см', approx:false, pos:{x:.5, y:.33}, fine:1, calib:false, pts:[], drag:null, rect:null};
+const ph = {warp:null, edit:false, handle:null, quad:null, dims:null, room:null, sample:true, pxPerCm:3.2, scaleSrc:'по дивану шириной 200 см', approx:false, pos:{x:.5, y:.33}, fine:1, calib:false, pts:[], drag:null, rect:null};
 function sampleRoom(){
   const c = document.createElement('canvas'); c.width = 1600; c.height = 1000; const x = c.getContext('2d');
   const g = x.createLinearGradient(0,0,0,780); g.addColorStop(0,'#d3d5cf'); g.addColorStop(1,'#c4c7c0'); x.fillStyle = g; x.fillRect(0,0,1600,780);
@@ -117,12 +117,22 @@ async function drawPhoto(){
   const room = roomSrc();
   if (cv.width !== room.width || cv.height !== room.height){ cv.width = room.width; cv.height = room.height; }
   ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(room,0,0);
-  const p = cur(); ph.rect = null;
+  const p = cur(); ph.rect = null; ph.quad = null;
   if (p){
     let im; try { im = await getImg(p.img); } catch(e){ im = null; }
     if (im && cur() === p){
       ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(room,0,0);
-      ph.rect = drawFramed(ctx, p, im, ph.pos.x*cv.width, ph.pos.y*cv.height, ph.pxPerCm*ph.fine);
+      const k = ph.pxPerCm*ph.fine, cx = ph.pos.x*cv.width, cy = ph.pos.y*cv.height;
+      if (ph.warp){
+        const o = outer(p), W = o.w*k, H = o.h*k; ph.dims = {W, H};
+        ph.quad = ph.warp.map(n => ({x:cx + n.x*W/2, y:cy + n.y*H/2}));
+        drawWarped(ctx, p, im, k, ph.quad);
+        const xs = ph.quad.map(q => q.x), ys = ph.quad.map(q => q.y);
+        ph.rect = {L:Math.min(...xs), T:Math.min(...ys), W:Math.max(...xs) - Math.min(...xs), H:Math.max(...ys) - Math.min(...ys)};
+      } else {
+        ph.rect = drawFramed(ctx, p, im, cx, cy, k); ph.dims = {W:ph.rect.W, H:ph.rect.H};
+      }
+      if (ph.edit) drawHandles();
     }
   }
   if (ph.calib){
@@ -132,38 +142,154 @@ async function drawPhoto(){
     ctx.restore();
   }
 }
-function drawFramed(x, p, im, cx, cy, k){
-  const f = FRAMES[p.frame] || FRAMES.none; const o = outer(p);
-  const W = o.w*k, H = o.h*k, L = cx - W/2, T = cy - H/2;
-  x.save();
-  x.shadowColor = 'rgba(0,0,0,.38)'; x.shadowBlur = Math.max(6, W*0.05); x.shadowOffsetY = Math.max(3, W*0.025);
+function paintBody(x, p, im, L, T, k){
+  const f = FRAMES[p.frame] || FRAMES.none; const o = outer(p); const W = o.w*k, H = o.h*k;
   x.fillStyle = f.color || '#2a2a2a'; x.fillRect(L,T,W,H);
-  x.restore();
   if (f.w){ x.strokeStyle = 'rgba(0,0,0,.35)'; x.lineWidth = Math.max(1, k*0.3); x.strokeRect(L + f.w*k, T + f.w*k, W - 2*f.w*k, H - 2*f.w*k); }
   if (f.mat){ x.fillStyle = '#f4f3ef'; x.fillRect(L + f.w*k, T + f.w*k, W - 2*f.w*k, H - 2*f.w*k); }
   const a = (f.w + f.mat)*k; x.drawImage(im, L + a, T + a, p.w*k, p.h*k);
+}
+function drawFramed(x, p, im, cx, cy, k){
+  const o = outer(p);
+  const W = o.w*k, H = o.h*k, L = cx - W/2, T = cy - H/2;
+  x.save();
+  x.shadowColor = 'rgba(0,0,0,.38)'; x.shadowBlur = Math.max(6, W*0.05); x.shadowOffsetY = Math.max(3, W*0.025);
+  x.fillStyle = '#2a2a2a'; x.fillRect(L,T,W,H);
+  x.restore();
+  paintBody(x, p, im, L, T, k);
   return {L, T, W, H};
 }
+
+/* ---------- «Подогнать под угол»: картина в перспективе по четырём уголкам ----------
+   Уголки хранятся относительно центра в долях половины ширины и высоты,
+   поэтому форма сохраняется при перетаскивании, смене картины и масштаба. */
+const DEFAULT_WARP = () => [{x:-1,y:-1},{x:1,y:-1},{x:1,y:1},{x:-1,y:1}];
+let flatCache = {key:'', c:null};
+function flatPainting(p, im, k){
+  const o = outer(p), W = Math.max(2, Math.round(o.w*k)), H = Math.max(2, Math.round(o.h*k));
+  const key = p.id + '|' + p.frame + '|' + W + 'x' + H;
+  if (flatCache.key === key) return flatCache.c;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  paintBody(c.getContext('2d'), p, im, 0, 0, W / o.w);
+  flatCache = {key, c}; return c;
+}
+function squareToQuad(q){
+  const [p0,p1,p2,p3] = q;
+  const dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dx3 = p0.x - p1.x + p2.x - p3.x;
+  const dy1 = p1.y - p2.y, dy2 = p3.y - p2.y, dy3 = p0.y - p1.y + p2.y - p3.y;
+  let g = 0, h = 0;
+  if (Math.abs(dx3) > 1e-9 || Math.abs(dy3) > 1e-9){
+    const den = dx1*dy2 - dx2*dy1 || 1e-9;
+    g = (dx3*dy2 - dx2*dy3) / den; h = (dx1*dy3 - dx3*dy1) / den;
+  }
+  const a = p1.x - p0.x + g*p1.x, b = p3.x - p0.x + h*p3.x, c = p0.x;
+  const d = p1.y - p0.y + g*p1.y, e = p3.y - p0.y + h*p3.y, f = p0.y;
+  return (u, v) => { const w = g*u + h*v + 1; return {x:(a*u + b*v + c)/w, y:(d*u + e*v + f)/w}; };
+}
+function drawTri(x, img, s, d){
+  const cxm = (d[0].x + d[1].x + d[2].x)/3, cym = (d[0].y + d[1].y + d[2].y)/3;
+  x.save(); x.beginPath();
+  d.forEach((pt, i) => { const dx = pt.x - cxm, dy = pt.y - cym, l = Math.hypot(dx, dy) || 1, gx = pt.x + dx/l*0.8, gy = pt.y + dy/l*0.8;
+    i ? x.lineTo(gx, gy) : x.moveTo(gx, gy); });
+  x.closePath(); x.clip();
+  const [a0,a1,a2] = s, [b0,b1,b2] = d;
+  const den = (a1.x - a0.x)*(a2.y - a0.y) - (a2.x - a0.x)*(a1.y - a0.y);
+  if (Math.abs(den) < 1e-9){ x.restore(); return; }
+  const m11 = ((b1.x - b0.x)*(a2.y - a0.y) - (b2.x - b0.x)*(a1.y - a0.y)) / den;
+  const m21 = ((b2.x - b0.x)*(a1.x - a0.x) - (b1.x - b0.x)*(a2.x - a0.x)) / den;
+  const m12 = ((b1.y - b0.y)*(a2.y - a0.y) - (b2.y - b0.y)*(a1.y - a0.y)) / den;
+  const m22 = ((b2.y - b0.y)*(a1.x - a0.x) - (b1.y - b0.y)*(a2.x - a0.x)) / den;
+  x.setTransform(m11, m12, m21, m22, b0.x - m11*a0.x - m21*a0.y, b0.y - m12*a0.x - m22*a0.y);
+  const sx = Math.max(0, Math.floor(Math.min(a0.x, a1.x, a2.x)) - 1), sy = Math.max(0, Math.floor(Math.min(a0.y, a1.y, a2.y)) - 1);
+  const sw = Math.min(img.width - sx, Math.ceil(Math.max(a0.x, a1.x, a2.x)) + 1 - sx), sh = Math.min(img.height - sy, Math.ceil(Math.max(a0.y, a1.y, a2.y)) + 1 - sy);
+  if (sw > 0 && sh > 0) x.drawImage(img, sx, sy, sw, sh, sx, sy, sw, sh);
+  x.restore();
+}
+function drawWarped(x, p, im, k, quad){
+  const flat = flatPainting(p, im, k), W = flat.width, H = flat.height;
+  const W2 = Math.hypot(quad[1].x - quad[0].x, quad[1].y - quad[0].y);
+  x.save(); x.shadowColor = 'rgba(0,0,0,.38)'; x.shadowBlur = Math.max(6, W2*0.05); x.shadowOffsetY = Math.max(3, W2*0.025);
+  x.fillStyle = '#2a2a2a'; x.beginPath(); quad.forEach((q, i) => i ? x.lineTo(q.x, q.y) : x.moveTo(q.x, q.y)); x.closePath(); x.fill();
+  x.restore();
+  const map = squareToQuad(quad), N = 12;
+  const P = [], S = [];
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++){ P.push(map(i/N, j/N)); S.push({x:i/N*W, y:j/N*H}); }
+  const at = (i, j) => j*(N + 1) + i;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++){
+    const a = at(i,j), b = at(i+1,j), c = at(i+1,j+1), d = at(i,j+1);
+    drawTri(x, flat, [S[a],S[b],S[c]], [P[a],P[b],P[c]]);
+    drawTri(x, flat, [S[a],S[c],S[d]], [P[a],P[c],P[d]]);
+  }
+}
+const cssToCanvas = () => { const r = cv.getBoundingClientRect(); return r.width ? cv.width / r.width : 1; };
+function handleR(){ return 13 * cssToCanvas(); }
+function drawHandles(){
+  const q = ph.quad || (ph.rect && [{x:ph.rect.L,y:ph.rect.T},{x:ph.rect.L+ph.rect.W,y:ph.rect.T},{x:ph.rect.L+ph.rect.W,y:ph.rect.T+ph.rect.H},{x:ph.rect.L,y:ph.rect.T+ph.rect.H}]);
+  if (!q) return; const r = handleR();
+  ctx.save(); ctx.lineWidth = Math.max(2, r*0.18); ctx.strokeStyle = '#ffffff'; ctx.setLineDash([r*0.6, r*0.4]);
+  ctx.beginPath(); q.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.closePath(); ctx.stroke();
+  ctx.setLineDash([]);
+  q.forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, r, 0, Math.PI*2); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill();
+    ctx.lineWidth = Math.max(2, r*0.22); ctx.strokeStyle = '#7B2D4A'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, Math.max(2, r*0.18), 0, Math.PI*2); ctx.fillStyle = '#7B2D4A'; ctx.fill(); });
+  ctx.restore();
+}
+function inQuad(q, pt){
+  let inside = false;
+  for (let i = 0, j = q.length - 1; i < q.length; j = i++){
+    if (((q[i].y > pt.y) !== (q[j].y > pt.y)) && (pt.x < (q[j].x - q[i].x) * (pt.y - q[i].y) / (q[j].y - q[i].y) + q[i].x)) inside = !inside;
+  }
+  return inside;
+}
+function onPainting(q){
+  if (ph.quad) return inQuad(ph.quad, q);
+  const r = ph.rect; return !!(r && q.x >= r.L && q.x <= r.L + r.W && q.y >= r.T && q.y <= r.T + r.H);
+}
+function updateWarpUi(){
+  $('#warpBtn').textContent = ph.edit ? 'Готово' : 'Подогнать под угол';
+  $('#warpBtn').classList.toggle('primary', ph.edit);
+  $('#warpReset').hidden = !ph.warp;
+}
+async function leaveEdit(){ if (ph.edit){ ph.edit = false; updateWarpUi(); } if (ph.calib) stopCalib(); await drawPhoto(); }
+$('#warpBtn').addEventListener('click', () => {
+  if (ph.calib) stopCalib();
+  ph.edit = !ph.edit;
+  if (ph.edit && !ph.warp){ ph.warp = DEFAULT_WARP(); toast('Перетащите уголки картины вдоль линий двери, окна или плинтуса.'); }
+  updateWarpUi(); drawPhoto();
+});
+$('#warpReset').addEventListener('click', () => { ph.warp = null; ph.edit = false; updateWarpUi(); drawPhoto(); });
+
 function canvasPt(e){ const r = cv.getBoundingClientRect(); return {x:(e.clientX - r.left) * cv.width / r.width, y:(e.clientY - r.top) * cv.height / r.height}; }
 cv.addEventListener('pointerdown', e => {
   const q = canvasPt(e);
   if (ph.calib){ if (ph.pts.length >= 2) ph.pts = []; ph.pts.push(q); if (ph.pts.length === 2){ $('#calibForm').hidden = false; $('#calibCm').focus(); } drawPhoto(); return; }
-  const r = ph.rect;
-  if (r && q.x >= r.L && q.x <= r.L + r.W && q.y >= r.T && q.y <= r.T + r.H){
+  if (ph.edit && ph.quad){
+    const r = handleR() * 1.8;
+    const i = ph.quad.findIndex(pt => Math.hypot(pt.x - q.x, pt.y - q.y) <= r);
+    if (i >= 0){ ph.handle = i; cv.setPointerCapture(e.pointerId); return; }
+  }
+  if (onPainting(q)){
     ph.drag = {dx:q.x - ph.pos.x*cv.width, dy:q.y - ph.pos.y*cv.height}; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing';
-  } else {
+  } else if (!ph.edit){
     ph.pos = {x:q.x/cv.width, y:q.y/cv.height}; drawPhoto();
   }
 });
-cv.addEventListener('pointermove', e => { if (!ph.drag) return; const q = canvasPt(e);
+cv.addEventListener('pointermove', e => {
+  const q = canvasPt(e);
+  if (ph.handle != null && ph.warp && ph.dims){
+    const cx = ph.pos.x*cv.width, cy = ph.pos.y*cv.height;
+    ph.warp[ph.handle] = {x:(q.x - cx) / (ph.dims.W/2), y:(q.y - cy) / (ph.dims.H/2)};
+    drawPhoto(); return;
+  }
+  if (!ph.drag) return;
   ph.pos = {x:(q.x - ph.drag.dx)/cv.width, y:(q.y - ph.drag.dy)/cv.height}; drawPhoto(); });
-const endDrag = () => { ph.drag = null; cv.style.cursor = ''; };
+const endDrag = () => { ph.drag = null; ph.handle = null; cv.style.cursor = ''; };
 cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
 
 $('#roomFile').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try { const r = await fileToData(f, 2000); const im = await getImg(r.data);
-    ph.room = im; ph.sample = false; ph.pxPerCm = im.width / 350; ph.approx = true; ph.pos = {x:.5, y:.4}; ph.fine = 1; $('#fine').value = 100; $('#fineOut').textContent = '100%';
+    ph.room = im; ph.sample = false; ph.warp = null; ph.edit = false; updateWarpUi(); ph.pxPerCm = im.width / 350; ph.approx = true; ph.pos = {x:.5, y:.4}; ph.fine = 1; $('#fine').value = 100; $('#fineOut').textContent = '100%';
     updateScaleNote(); drawPhoto(); toast('Фото загружено. Теперь задайте масштаб.');
   } catch(err){ toast('Не получилось открыть это фото. Выберите JPG или PNG.'); }
 });
@@ -191,6 +317,7 @@ function saveBlob(blob){
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 $('#saveBtn').addEventListener('click', async () => {
+  await leaveEdit();
   const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.9));
   if (!blob){ toast('Не получилось подготовить картинку.'); return; }
   saveBlob(blob);
@@ -256,8 +383,7 @@ $('#shareCopy').addEventListener('click', () => {
 $('#shareDlg .share-close').addEventListener('click', () => { const d = $('#shareDlg'); if (!d.close) d.removeAttribute('open'); });
 $('#shareBtn').addEventListener('click', () => {
   const p = cur(); if (!p){ toast('Сначала выберите картину.'); return; }
-  if (ph.calib) stopCalib();
-  openShare(cv, p);
+  leaveEdit().then(() => openShare(cv, p));
 });
 
 /* ---------- AR (WebXR) ---------- */
