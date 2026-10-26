@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Примерить картину у себя на стене</title>
+<meta name="description" content="Картина в натуральную величину у тебя дома: через камеру телефона или на фото комнаты.">
+<link rel="canonical" href="https://svtrubl.github.io/primerka/fit/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Светлана — авторская живопись">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:title" content="Примерить картину у себя на стене">
+<meta property="og:description" content="Картина в натуральную величину у тебя дома: через камеру телефона или на фото комнаты.">
+<meta property="og:url" content="https://svtrubl.github.io/primerka/fit/">
+<meta property="og:image" content="https://svtrubl.github.io/primerka/img/og/fit.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#ECE9EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16131B" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prata&family=Manrope:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="../assets/style.css">
+<link rel="stylesheet" href="../assets/fit.css">
+<script>window.SITE = {"contact": "", "short": "ссылка в профиле художника"};</script>
+<script src="../assets/fit.js" defer></script>
+</head>
+<body>
+<header class="site-head">
+  <div class="wrap">
+    <a class="logo" href="../"><b>Светлана</b><span>авторская живопись</span></a>
+    <nav class="nav" aria-label="Разделы"><a href="../works/">Работы</a><a href="../mood/">Какое ты чувство</a><a href="../fit/" aria-current="page">Примерка</a></nav>
+  </div>
+</header>
+<main class="wrap fit-page">
+<div class="chrome-bar" id="chromeBar" hidden>
+  <p>Примерка через камеру работает только в Chrome.</p>
+  <div class="row">
+    <a class="btn primary" id="chromeLink" href="#">Открыть в Chrome</a>
+    <button class="btn" type="button" id="copyLink">Скопировать адрес</button>
+  </div>
+  <p class="note" id="siteAddr"></p>
+</div>
+<div class="app">
+  <div class="col">
+    <div class="fit-intro">
+      <h1>Примерка картин</h1>
+      <p>Картина в натуральную величину на вашей стене: через камеру телефона или по фото комнаты.</p>
+    </div>
+
+    <section class="panel" aria-labelledby="h-works">
+      <h2 class="eyebrow" id="h-works">Картины</h2>
+      <div class="strip" id="strip"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-ar">
+      <h2 class="eyebrow" id="h-ar">Через камеру</h2>
+      <button class="btn primary big" id="arStart" disabled>Примерить на стене</button>
+      <p class="status" id="arStatus" data-state="">Проверяю, поддерживает ли телефон примерку через камеру…</p>
+      <p class="note">Наведите прицел на плинтус чуть левее места для картины и нажмите на экран, затем на плинтус правее, хотя бы на 30 см. Картина повиснет на стене между точками, центр будет на высоте 150 см. Двигайте её кнопками «Левее», «Правее», «Выше», «Ниже».</p>
+    </section>
+
+    <section class="panel label" aria-labelledby="h-label">
+      <h2 class="eyebrow" id="h-label" style="margin:0">Этикетка</h2>
+      <div class="title-row">
+        <p class="lbl-name" id="lblName"></p>
+        <span class="outer" id="outerSize"></span>
+      </div>
+      <label class="f">Примерить с рамой<select id="pFrame"></select></label>
+    </section>
+  </div>
+
+  <div class="col col-r">
+    <section class="panel" aria-labelledby="h-photo">
+      <h2 class="eyebrow" id="h-photo">По фото комнаты</h2>
+      <div class="stage">
+        <canvas id="photoCanvas" width="1600" height="1000" aria-label="Фото комнаты с картиной. Перетащите картину пальцем или мышью."></canvas>
+        <span class="badge" id="roomBadge">Пример комнаты</span>
+      </div>
+      <p class="note" id="scaleNote"></p>
+      <div class="tools">
+        <div class="row">
+          <label class="btn" for="roomFile">Загрузить фото комнаты</label>
+          <input type="file" id="roomFile" accept="image/*">
+          <button class="btn" id="calibBtn">Задать масштаб</button>
+          <button class="btn ghost" id="saveBtn">Сохранить картинку</button>
+        </div>
+        <form id="calibForm" hidden>
+          <label class="f">Расстояние между отметками, см<input type="number" id="calibCm" min="1" step="1" inputmode="decimal" placeholder="например, 80"></label>
+          <button class="btn primary" type="submit">Применить</button>
+          <button class="btn ghost" type="button" id="calibCancel">Отмена</button>
+        </form>
+        <div class="slider"><span>Поправка на перспективу</span><input type="range" id="fine" min="50" max="150" value="100"><output id="fineOut">100%</output></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="xrOverlay" hidden>
+  <div id="xrAim" aria-hidden="true"></div>
+  <div id="xrFlash" role="status" hidden></div>
+  <div class="xr-top">
+    <div class="xr-hint" id="xrHint">Ищу пол…</div>
+    <button class="xr-btn" id="xrExit">Выйти</button>
+  </div>
+  <div class="xr-panel" id="xrPanel">
+    <div class="xr-info" id="xrInfo"></div>
+    <div class="xr-steps">
+      <span class="xr-step" id="xrStep1" data-s="current"><i>1</i> Точка на плинтусе</span>
+      <span class="xr-step" id="xrStep2" data-s="todo"><i>2</i> Вторая точка</span>
+    </div>
+    <div class="xr-strip" id="xrStrip"></div>
+    <div class="xr-actions">
+      <button class="xr-btn" id="xrLeft">← Левее</button>
+      <button class="xr-btn" id="xrRight">Правее →</button>
+      <button class="xr-btn" id="xrUp">↑ Выше</button>
+      <button class="xr-btn" id="xrDown">↓ Ниже</button>
+    </div>
+    <button class="xr-btn" id="xrReset">Поставить точки заново</button>
+  </div>
+</div>
+
+</main>
+<footer class="site-foot">
+  <div class="wrap">
+    <span>© 2026 Светлана, авторская живопись</span>
+    
+  </div>
+</footer>
+</body>
+</html>

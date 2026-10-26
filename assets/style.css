@@ -1,0 +1,94 @@
+/* Общий стиль сайта «Светлана — авторская живопись».
+   Стена галереи: приглушённый серо-сиреневый фон, краплак как единственный акцент,
+   Prata для заголовков, Manrope для текста. Картины везде показаны в одном масштабе. */
+:root{
+  --bg:#ECE9EF; --surface:#F7F5F8; --paper:#F7F5F8; --ink:#221D2A; --muted:#6B6475; --line:#D6D0DC;
+  --accent:#7B2D4A; --accent-ink:#FFFFFF; --accent-soft:#F1E3E9;
+  --wall-top:#DDD8E0; --wall-bottom:#D2CCD6; --plinth:#F4F2F6; --floor:#8A6B52;
+  --ok:#2F7A55; --off:#9A5B17;
+  --f-display:"Prata",Georgia,serif;
+  --f-body:"Manrope","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  --r:12px;
+  --gutter:max(16px,env(safe-area-inset-left,0px));
+  --max:1120px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#16131B; --surface:#201C27; --paper:#201C27; --ink:#EDE8F2; --muted:#A79FB2; --line:#3A3442;
+  --accent:#D07A98; --accent-ink:#1A0F15; --accent-soft:#3A2230;
+  --wall-top:#26212D; --wall-bottom:#1F1B25; --plinth:#35303D; --floor:#4A3A2E;
+  --ok:#6FCB93; --off:#E2A35C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#16131B; --surface:#201C27; --paper:#201C27; --ink:#EDE8F2; --muted:#A79FB2; --line:#3A3442;
+  --accent:#D07A98; --accent-ink:#1A0F15; --accent-soft:#3A2230;
+  --wall-top:#26212D; --wall-bottom:#1F1B25; --plinth:#35303D; --floor:#4A3A2E;
+  --ok:#6FCB93; --off:#E2A35C; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--f-body);
+  /* фактура холста: едва заметное зерно */
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .45 0 0 0 0 .55 0 0 0 .06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+img{max-width:100%}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.wrap{max-width:var(--max);margin:0 auto;padding-inline:var(--gutter)}
+
+/* ---------- шапка ---------- */
+.site-head{padding-block:18px 10px}
+.site-head .wrap{display:flex;align-items:baseline;justify-content:space-between;gap:12px 24px;flex-wrap:wrap}
+.logo{text-decoration:none;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.logo b{font:400 24px/1 var(--f-display)}
+.logo span{font-size:14px;color:var(--muted)}
+.nav{display:flex;gap:4px 18px;flex-wrap:wrap;font-size:15px}
+.nav a{text-decoration:none;color:var(--muted);padding:4px 0;border-bottom:1.5px solid transparent}
+.nav a:hover{color:var(--ink)}
+.nav a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)}
+
+/* ---------- подвал ---------- */
+.site-foot{margin-top:72px;padding-block:28px 40px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+.site-foot .wrap{display:flex;justify-content:space-between;gap:12px 24px;flex-wrap:wrap}
+.site-foot a{color:var(--ink)}
+.contacts{display:flex;gap:16px;flex-wrap:wrap}
+
+/* ---------- кнопки ---------- */
+.button{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;cursor:pointer;
+  font:600 16px/1.2 var(--f-body);padding:14px 22px;border-radius:999px;border:0;background:var(--accent);color:var(--accent-ink)}
+.button:hover{filter:brightness(1.08)}
+.button.quiet{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.button.quiet:hover{box-shadow:inset 0 0 0 1px var(--muted);filter:none}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+
+/* ---------- типографика ---------- */
+h1,h2,h3{font-family:var(--f-display);font-weight:400;text-wrap:balance;margin:0}
+.lead{font-size:clamp(17px,2.2vw,19px);color:var(--muted);max-width:52ch;margin:0}
+
+/* ---------- стена: картины в одном масштабе ----------
+   --k — пикселей на сантиметр. Ширина картины = w × --k, поэтому
+   90 × 60 всегда втрое шире 30 × 40, на любом экране. */
+.wall{--k:min(4px,calc((100vw - 64px) / 210));position:relative;
+  background:linear-gradient(var(--wall-top),var(--wall-bottom));border-radius:4px;
+  padding:clamp(28px,6vw,64px) clamp(16px,4vw,48px) 0;overflow:hidden}
+.wall::after{content:"";display:block;height:14px;margin-inline:calc(-1 * clamp(16px,4vw,48px));
+  background:var(--plinth);border-bottom:clamp(10px,2vw,18px) solid var(--floor)}
+/* как в галерее: центры картин на одной высоте */
+.hang{display:flex;align-items:center;justify-content:center;gap:calc(var(--k) * 16);flex-wrap:nowrap;
+  padding-bottom:clamp(28px,5vw,56px)}
+.piece{display:flex;flex-direction:column;gap:12px;text-decoration:none;color:inherit;flex:0 0 auto}
+.piece .canvas{display:block;width:calc(var(--w) * var(--k));aspect-ratio:var(--w) / var(--h);
+  box-shadow:0 1px 1px rgba(0,0,0,.18),0 calc(var(--k)*4) calc(var(--k)*6) calc(var(--k)*-2) rgba(20,10,30,.45);
+  background:var(--line);overflow:hidden}
+.piece .canvas img{display:block;width:100%;height:100%;object-fit:cover}
+.piece:hover .canvas{outline:2px solid var(--accent);outline-offset:4px}
+.tag{font-size:13px;line-height:1.35;color:var(--muted);max-width:calc(var(--w) * var(--k) + 40px)}
+.tag b{display:block;font:400 15px/1.3 var(--f-display);color:var(--ink)}
+.scale-note{font-size:13px;color:var(--muted);margin:10px 0 0}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* на узком экране подписи под картинами на общей стене не помещаются: картины кликабельны и ведут на свои страницы */
+@media (max-width:620px){
+  .wall:not(.wall-big) .tag{display:none}
+  .wall:not(.wall-big){--k:calc((100vw - 64px) / 200)}
+}

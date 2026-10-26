@@ -1,0 +1,107 @@
+/* Примерка картин: стили страницы /fit/ (перенесены из прежнего index.html без изменений логики) */
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+.chrome-bar{margin:0 0 16px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px}
+.chrome-bar p{margin:0;font-weight:500}
+.chrome-bar .note{font-weight:400;overflow-wrap:anywhere}
+a.btn{text-decoration:none}
+.app{display:grid;gap:20px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:900px){.app{grid-template-columns:minmax(0,400px) minmax(0,1fr);align-items:start}
+  .col-r{position:sticky;top:16px}}
+.col{display:flex;flex-direction:column;gap:18px;min-width:0}
+
+.fit-intro h1{font:400 clamp(28px,5vw,40px)/1.05 var(--f-display);margin:0 0 6px;letter-spacing:.01em;text-wrap:balance}
+.fit-intro p{margin:0;color:var(--muted);max-width:58ch}
+
+.eyebrow{font:500 11px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+
+/* works strip */
+.strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.work{flex:0 0 auto;width:96px;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.work .pic{height:96px;width:96px;border-radius:6px;background:var(--bg);display:grid;place-items:center;border:2px solid transparent;overflow:hidden}
+.work img{max-height:84px;max-width:84px;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.work[aria-pressed="true"] .pic{border-color:var(--accent)}
+.work .cap{font-size:12px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work .dim{font:12px var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.work.add .pic{border:1.5px dashed var(--line);font:300 34px/1 var(--f-body);color:var(--muted)}
+
+/* museum label editor */
+.label{display:grid;gap:12px}
+.label .title-row{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
+.lbl-name{font:400 22px/1.2 var(--f-display);margin:0;text-wrap:balance}
+.label .outer{font:13px var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fields .wide{grid-column:1/-1}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+input[type=text],input[type=number],select{font:15px var(--f-body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:9px 10px;width:100%;min-width:0}
+input[type=number]{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+button.btn,label.btn,a.btn{font:500 14px var(--f-body);border-radius:8px;padding:10px 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+button.btn:hover,label.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:none}
+.btn.danger{color:var(--off)}
+.btn.big{width:100%;justify-content:center;padding:15px 16px;font-size:16px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+.status{font-size:13px;margin:10px 0 0;display:flex;gap:8px;align-items:flex-start}
+.status::before{content:"";flex:0 0 8px;height:8px;border-radius:50%;margin-top:6px;background:var(--muted)}
+.status[data-state="ok"]::before{background:var(--ok)}
+.status[data-state="off"]::before{background:var(--off)}
+.note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+
+/* photo mode */
+.stage{position:relative;border-radius:8px;overflow:hidden;background:var(--bg);border:1px solid var(--line)}
+#photoCanvas{display:block;width:100%;height:auto;touch-action:none;cursor:grab}
+#photoCanvas.calib{cursor:crosshair}
+.stage .badge{position:absolute;left:10px;top:10px;font:12px var(--f-body);background:var(--ov-bg);color:var(--ov-fg);padding:4px 8px;border-radius:999px}
+.tools{display:grid;gap:10px;margin-top:12px}
+.slider{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}
+.slider input{flex:1;min-width:0;accent-color:var(--accent)}
+.slider output{font:13px var(--f-mono);min-width:4ch;text-align:right;color:var(--ink)}
+#calibForm{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+#calibForm label.f{flex:1 1 140px}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:8px;font-size:14px;z-index:50;max-width:calc(100% - 32px)}
+
+/* AR overlay (sits over the live camera, one look in both themes) */
+#xrOverlay{position:fixed;inset:0;z-index:100;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;
+  padding:calc(12px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));color:var(--ov-fg);font-family:var(--f-body)}
+#xrOverlay > *{pointer-events:auto}
+.xr-top{position:relative;z-index:1;display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.xr-hint{background:var(--ov-bg);padding:9px 13px;border-radius:999px;font-size:14px;max-width:75%}
+.xr-btn{background:var(--ov-bg);color:var(--ov-fg);border:1px solid var(--ov-line);border-radius:999px;padding:9px 14px;font:500 14px var(--f-body)}
+.xr-panel{background:var(--ov-bg);border-radius:14px;padding:12px;display:grid;gap:10px}
+.xr-info{font-size:13px;line-height:1.35}
+.xr-info b{font-weight:600}
+.xr-info .mono{font-family:var(--f-mono)}
+.xr-debug{font:11px/1.35 var(--f-mono);color:#ffd84d;white-space:pre-wrap;word-break:break-word}
+.xr-strip{display:flex;gap:8px;overflow-x:auto}
+.xr-strip button{flex:0 0 auto;width:48px;height:48px;border-radius:8px;border:2px solid transparent;background:rgba(255,255,255,.1);padding:3px;display:grid;place-items:center}
+.xr-strip button[aria-pressed="true"]{border-color:var(--ov-fg)}
+.xr-strip img{max-width:38px;max-height:38px}
+
+#xrOverlay > #xrAim{pointer-events:none;position:fixed;left:50%;top:60%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;
+  border:3px solid rgba(200,200,200,.85);box-shadow:0 0 0 1px rgba(0,0,0,.35),inset 0 0 0 1px rgba(0,0,0,.35)}
+#xrAim::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:currentColor}
+#xrAim{color:rgba(200,200,200,.85)}
+#xrOverlay > #xrAim[data-state="floor"]{border-color:#ffc94d;color:#ffc94d}
+#xrOverlay > #xrAim[data-state="wall"]{border-color:#fff;color:#fff}
+.xr-steps{display:flex;gap:8px}
+.xr-step{flex:1;display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:999px;border:1px solid var(--ov-line);font-size:13px;opacity:.6}
+.xr-step i{font-style:normal;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;border:1.5px solid currentColor;font-size:12px;flex:0 0 auto}
+.xr-step[data-s="current"]{opacity:1;border-color:#ffc94d;color:#ffc94d}
+.xr-step[data-s="done"]{opacity:1;background:#2f8f5b;border-color:#2f8f5b;color:#fff}
+.xr-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.xr-actions .xr-btn{padding:9px 4px}
+.xr-btn:disabled{opacity:.35}
+#xrOverlay > #xrFlash{pointer-events:none;position:fixed;left:50%;top:60%;transform:translate(-50%,-150%);background:#2f8f5b;color:#fff;font:600 15px var(--f-body);padding:10px 16px;border-radius:12px;white-space:nowrap;max-width:calc(100% - 32px);overflow:hidden;text-overflow:ellipsis;box-shadow:0 4px 16px rgba(0,0,0,.35)}
+#xrFlash[data-kind="warn"]{background:#b36b12}
+#xrFlash.show{animation:pop .25s ease-out}
+@keyframes pop{from{transform:translate(-50%,-110%) scale(.85);opacity:0}to{transform:translate(-50%,-150%) scale(1);opacity:1}}
+#xrOverlay > #xrAim[data-state="off"]{display:none}

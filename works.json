@@ -1,0 +1,38 @@
+{
+  "_как_добавить": "Новая работа: фото в img/works/<slug>.jpg и запись ниже. w — ширина, h — высота в сантиметрах. В story — только «История — для всех». После правки попроси Claude пересобрать страницы.",
+  "works": [
+    {
+      "slug": "yarost-mladentsa",
+      "title": "Ярость младенца",
+      "year": 2026,
+      "technique": "Масло",
+      "w": 90,
+      "h": 60,
+      "img": "img/works/yarost-mladentsa.jpg",
+      "mood": "rage",
+      "story": "Сила, которой тесно внутри. Она не плохая, она живая."
+    },
+    {
+      "slug": "naslazhdenie",
+      "title": "Наслаждение",
+      "year": 2026,
+      "technique": "Масло",
+      "w": 60,
+      "h": 90,
+      "img": "img/works/naslazhdenie.jpg",
+      "mood": "joy",
+      "story": "Бабочка у губ — это наслаждение: нежное, почти неуловимое касание, которое замечаешь, когда оно уже улетело."
+    },
+    {
+      "slug": "vnutrenniy-svet",
+      "title": "Внутренний свет",
+      "year": null,
+      "technique": "Масло",
+      "w": 30,
+      "h": 40,
+      "img": "img/works/vnutrenniy-svet.jpg",
+      "mood": "light",
+      "story": "Тихая опора внутри, из которой что-то начинает расти."
+    }
+  ]
+}
