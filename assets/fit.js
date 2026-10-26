@@ -87,7 +87,7 @@ $('#pFrame').addEventListener('change', e => { cur().frame = e.target.value; per
 
 /* ---------- photo mode ---------- */
 const cv = $('#photoCanvas'), ctx = cv.getContext('2d');
-const ph = {warp:null, edit:false, handle:null, quad:null, dims:null, room:null, sample:true, pxPerCm:3.2, scaleSrc:'по дивану шириной 200 см', approx:false, pos:{x:.5, y:.33}, fine:1, calib:false, pts:[], drag:null, rect:null};
+const ph = {warp:null, edit:false, handle:null, quad:null, dims:null, room:null, sample:true, pxPerCm:3.2, scaleSrc:'по дивану шириной 200 см', approx:false, pos:{x:.5, y:.33}, fine:1, calib:false, calibMode:'ceil', pts:[], drag:null, rect:null};
 function sampleRoom(){
   const c = document.createElement('canvas'); c.width = 1600; c.height = 1000; const x = c.getContext('2d');
   const g = x.createLinearGradient(0,0,0,780); g.addColorStop(0,'#d3d5cf'); g.addColorStop(1,'#c4c7c0'); x.fillStyle = g; x.fillRect(0,0,1600,780);
@@ -110,7 +110,7 @@ function roomSrc(){ return ph.room || SAMPLE_ROOM; }
 function updateScaleNote(){
   $('#roomBadge').hidden = !ph.sample;
   $('#scaleNote').textContent = ph.approx
-    ? 'Масштаб пока приблизительный. Нажмите «Задать масштаб» и отметьте края предмета известной ширины: двери, окна, дивана.'
+    ? 'Масштаб пока приблизительный. Нажмите «Задать масштаб»: проще всего по высоте потолка.'
     : 'Масштаб задан ' + ph.scaleSrc + '. Картину можно перетаскивать.';
 }
 async function drawPhoto(){
@@ -262,7 +262,7 @@ $('#warpReset').addEventListener('click', () => { ph.warp = null; ph.edit = fals
 function canvasPt(e){ const r = cv.getBoundingClientRect(); return {x:(e.clientX - r.left) * cv.width / r.width, y:(e.clientY - r.top) * cv.height / r.height}; }
 cv.addEventListener('pointerdown', e => {
   const q = canvasPt(e);
-  if (ph.calib){ if (ph.pts.length >= 2) ph.pts = []; ph.pts.push(q); if (ph.pts.length === 2){ $('#calibForm').hidden = false; $('#calibCm').focus(); } drawPhoto(); return; }
+  if (ph.calib){ if (ph.pts.length >= 2) ph.pts = []; ph.pts.push(q); calibStep(); drawPhoto(); return; }
   if (ph.edit && ph.quad){
     const r = handleR() * 1.8;
     const i = ph.quad.findIndex(pt => Math.hypot(pt.x - q.x, pt.y - q.y) <= r);
@@ -290,18 +290,64 @@ $('#roomFile').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try { const r = await fileToData(f, 2000); const im = await getImg(r.data);
     ph.room = im; ph.sample = false; ph.warp = null; ph.edit = false; updateWarpUi(); ph.pxPerCm = im.width / 350; ph.approx = true; ph.pos = {x:.5, y:.4}; ph.fine = 1; $('#fine').value = 100; $('#fineOut').textContent = '100%';
-    updateScaleNote(); drawPhoto(); toast('Фото загружено. Теперь задайте масштаб.');
+    updateScaleNote(); drawPhoto(); startCalib('ceil');
   } catch(err){ toast('Не получилось открыть это фото. Выберите JPG или PNG.'); }
 });
-$('#calibBtn').addEventListener('click', () => { ph.calib = true; ph.pts = []; cv.classList.add('calib'); $('#calibForm').hidden = true;
-  toast('Нажмите на фото в двух точках: на краях предмета, ширину которого знаете.'); drawPhoto(); });
-const stopCalib = () => { ph.calib = false; ph.pts = []; cv.classList.remove('calib'); $('#calibForm').hidden = true; drawPhoto(); };
+/* ---------- масштаб: по высоте потолка (главный способ), по двери, по предмету ----------
+   «Потолок» и «дверь»: первая точка у пола, вторая наверху, прямо над местом картины.
+   Так сайт знает и масштаб, и где пол, и вешает картину центром на 150 см от пола. */
+const CALIB = {
+  ceil:{hint:['Нажмите у пола, на плинтус, прямо под местом, где будет картина.', 'Теперь нажмите у потолка над этой же точкой.', 'Выберите высоту потолка.'],
+        lbl:'Высота потолка, см', def:270, chips:true},
+  door:{hint:['Нажмите у пола под дверью.', 'Теперь нажмите на верх дверного проёма.', 'Укажите высоту двери. Обычно это 200 см.'],
+        lbl:'Высота двери, см', def:200, chips:false},
+  obj: {hint:['Нажмите на один край предмета, ширину которого знаете: окна, дивана, комода.', 'Теперь на другой край.', 'Укажите расстояние между отметками.'],
+        lbl:'Расстояние между отметками, см', def:'', chips:false}
+};
+function calibStep(){
+  const m = CALIB[ph.calibMode], n = Math.min(ph.pts.length, 2);
+  $('#calibHint').textContent = m.hint[n];
+  const form = $('#calibForm'); form.hidden = n < 2;
+  if (n === 2){
+    $('#calibLbl').textContent = m.lbl; $('#ceilChips').hidden = !m.chips;
+    const inp = $('#calibCm'); if (!inp.value) inp.value = m.def; inp.placeholder = m.def ? '' : 'например, 80';
+    markChips();
+    if (!m.chips) inp.focus();
+  }
+}
+function markChips(){ const v = +$('#calibCm').value; document.querySelectorAll('#ceilChips .chip').forEach(c => c.setAttribute('aria-pressed', +c.dataset.cm === v)); }
+function setMode(mode){
+  ph.calibMode = mode; ph.pts = []; $('#calibCm').value = '';
+  document.querySelectorAll('.seg-b').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === mode));
+  calibStep(); drawPhoto();
+}
+function startCalib(mode){
+  if (ph.edit){ ph.edit = false; updateWarpUi(); }
+  ph.calib = true; cv.classList.add('calib'); $('#calibBox').hidden = false;
+  setMode(mode || ph.calibMode);
+  $('#calibBox').scrollIntoView({block:'nearest', behavior:'smooth'});
+}
+const stopCalib = () => { ph.calib = false; ph.pts = []; cv.classList.remove('calib'); $('#calibBox').hidden = true; $('#calibCm').value = ''; drawPhoto(); };
+$('#calibBtn').addEventListener('click', () => startCalib());
+document.querySelectorAll('.seg-b').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+document.querySelectorAll('#ceilChips .chip').forEach(c => c.addEventListener('click', () => { $('#calibCm').value = c.dataset.cm; markChips(); }));
+$('#calibCm').addEventListener('input', markChips);
 $('#calibCancel').addEventListener('click', stopCalib);
 $('#calibForm').addEventListener('submit', e => { e.preventDefault(); const cm = +$('#calibCm').value;
-  if (!(cm > 0) || ph.pts.length < 2){ toast('Введите расстояние в сантиметрах.'); return; }
-  const d = Math.hypot(ph.pts[1].x - ph.pts[0].x, ph.pts[1].y - ph.pts[0].y);
-  ph.pxPerCm = d / cm; ph.approx = false; ph.scaleSrc = 'по отметке ' + fmt(cm) + ' см'; ph.pos = {x:(ph.pts[0].x+ph.pts[1].x)/2/cv.width, y:Math.max(.15,(ph.pts[0].y+ph.pts[1].y)/2/cv.height - .25)};
-  $('#calibCm').value = ''; stopCalib(); updateScaleNote(); toast('Масштаб задан.'); });
+  if (!(cm > 0) || ph.pts.length < 2){ toast('Введите размер в сантиметрах.'); return; }
+  const [a, b] = ph.pts, d = Math.hypot(b.x - a.x, b.y - a.y);
+  ph.pxPerCm = d / cm; ph.approx = false; ph.fine = 1; $('#fine').value = 100; $('#fineOut').textContent = '100%';
+  if (ph.calibMode === 'obj'){
+    ph.scaleSrc = 'по отметке ' + fmt(cm) + ' см';
+    ph.pos = {x:(a.x + b.x)/2/cv.width, y:Math.max(.15, (a.y + b.y)/2/cv.height - .25)};
+  } else {
+    const floor = a.y > b.y ? a : b;
+    ph.scaleSrc = ph.calibMode === 'ceil' ? 'по высоте потолка ' + fmt(cm/100) + ' м' : 'по высоте двери ' + fmt(cm) + ' см';
+    const y = floor.y - 150 * ph.pxPerCm;
+    ph.pos = {x:floor.x / cv.width, y:Math.min(.95, Math.max(.05, y / cv.height))};
+  }
+  stopCalib(); updateScaleNote(); toast(ph.calibMode === 'obj' ? 'Масштаб задан.' : 'Масштаб задан. Картина висит центром на 150 см от пола.');
+});
 $('#fine').addEventListener('input', e => { ph.fine = e.target.value/100; $('#fineOut').textContent = e.target.value + '%'; drawPhoto(); });
 function saveBlob(blob){
   if (window.claude && window.claude.use){

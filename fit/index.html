@@ -90,11 +90,24 @@
           <button class="btn primary" id="shareBtn">Поделиться</button>
           <button class="btn ghost" id="saveBtn">Сохранить картинку</button>
         </div>
-        <form id="calibForm" hidden>
-          <label class="f">Расстояние между отметками, см<input type="number" id="calibCm" min="1" step="1" inputmode="decimal" placeholder="например, 80"></label>
-          <button class="btn primary" type="submit">Применить</button>
+        <div class="calib-box" id="calibBox" hidden>
+          <div class="seg" role="group" aria-label="Как задать масштаб">
+            <button type="button" class="seg-b" data-mode="ceil" aria-pressed="true">По потолку</button>
+            <button type="button" class="seg-b" data-mode="door" aria-pressed="false">По двери</button>
+            <button type="button" class="seg-b" data-mode="obj" aria-pressed="false">По предмету</button>
+          </div>
+          <p class="note calib-hint" id="calibHint"></p>
+          <form id="calibForm" hidden>
+            <div class="chips" id="ceilChips">
+              <button type="button" class="chip" data-cm="250">2,5 м</button>
+              <button type="button" class="chip" data-cm="270">2,7 м</button>
+              <button type="button" class="chip" data-cm="300">3 м</button>
+            </div>
+            <label class="f"><span id="calibLbl">Высота потолка, см</span><input type="number" id="calibCm" min="1" step="1" inputmode="decimal"></label>
+            <button class="btn primary" type="submit">Применить</button>
+          </form>
           <button class="btn ghost" type="button" id="calibCancel">Отмена</button>
-        </form>
+        </div>
         <div class="slider"><span>Поправка на перспективу</span><input type="range" id="fine" min="50" max="150" value="100"><output id="fineOut">100%</output></div>
       </div>
     </section>
