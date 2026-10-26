@@ -87,7 +87,7 @@ $('#pFrame').addEventListener('change', e => { cur().frame = e.target.value; per
 
 /* ---------- photo mode ---------- */
 const cv = $('#photoCanvas'), ctx = cv.getContext('2d');
-const ph = {warp:null, edit:false, handle:null, quad:null, dims:null, room:null, sample:true, pxPerCm:3.2, scaleSrc:'по дивану шириной 200 см', approx:false, pos:{x:.5, y:.33}, fine:1, calib:false, calibMode:'ceil', pts:[], drag:null, rect:null};
+const ph = {warp:null, keys:{l:1,r:1,t:1,b:1}, quad:null, dims:null, room:null, sample:true, pxPerCm:3.2, scaleSrc:'по дивану шириной 200 см', approx:false, pos:{x:.5, y:.33}, fine:1, calib:false, calibMode:'ceil', pts:[], drag:null, rect:null};
 function sampleRoom(){
   const c = document.createElement('canvas'); c.width = 1600; c.height = 1000; const x = c.getContext('2d');
   const g = x.createLinearGradient(0,0,0,780); g.addColorStop(0,'#d3d5cf'); g.addColorStop(1,'#c4c7c0'); x.fillStyle = g; x.fillRect(0,0,1600,780);
@@ -110,7 +110,7 @@ function roomSrc(){ return ph.room || SAMPLE_ROOM; }
 function updateScaleNote(){
   $('#roomBadge').hidden = !ph.sample;
   $('#scaleNote').textContent = ph.approx
-    ? 'Масштаб пока приблизительный. Нажмите «Задать масштаб»: проще всего по высоте потолка.'
+    ? 'Масштаб пока приблизительный. Нажмите «Масштаб» и протяните линейку от пола до потолка.'
     : 'Масштаб задан ' + ph.scaleSrc + '. Картину можно перетаскивать.';
 }
 async function drawPhoto(){
@@ -132,7 +132,6 @@ async function drawPhoto(){
       } else {
         ph.rect = drawFramed(ctx, p, im, cx, cy, k); ph.dims = {W:ph.rect.W, H:ph.rect.H};
       }
-      if (ph.edit) drawHandles();
     }
   }
   if (ph.calib){
@@ -221,19 +220,6 @@ function drawWarped(x, p, im, k, quad){
     drawTri(x, flat, [S[a],S[c],S[d]], [P[a],P[c],P[d]]);
   }
 }
-const cssToCanvas = () => { const r = cv.getBoundingClientRect(); return r.width ? cv.width / r.width : 1; };
-function handleR(){ return 13 * cssToCanvas(); }
-function drawHandles(){
-  const q = ph.quad || (ph.rect && [{x:ph.rect.L,y:ph.rect.T},{x:ph.rect.L+ph.rect.W,y:ph.rect.T},{x:ph.rect.L+ph.rect.W,y:ph.rect.T+ph.rect.H},{x:ph.rect.L,y:ph.rect.T+ph.rect.H}]);
-  if (!q) return; const r = handleR();
-  ctx.save(); ctx.lineWidth = Math.max(2, r*0.18); ctx.strokeStyle = '#ffffff'; ctx.setLineDash([r*0.6, r*0.4]);
-  ctx.beginPath(); q.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.closePath(); ctx.stroke();
-  ctx.setLineDash([]);
-  q.forEach(pt => { ctx.beginPath(); ctx.arc(pt.x, pt.y, r, 0, Math.PI*2); ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fill();
-    ctx.lineWidth = Math.max(2, r*0.22); ctx.strokeStyle = '#7B2D4A'; ctx.stroke();
-    ctx.beginPath(); ctx.arc(pt.x, pt.y, Math.max(2, r*0.18), 0, Math.PI*2); ctx.fillStyle = '#7B2D4A'; ctx.fill(); });
-  ctx.restore();
-}
 function inQuad(q, pt){
   let inside = false;
   for (let i = 0, j = q.length - 1; i < q.length; j = i++){
@@ -245,108 +231,97 @@ function onPainting(q){
   if (ph.quad) return inQuad(ph.quad, q);
   const r = ph.rect; return !!(r && q.x >= r.L && q.x <= r.L + r.W && q.y >= r.T && q.y <= r.T + r.H);
 }
-function updateWarpUi(){
-  $('#warpBtn').textContent = ph.edit ? 'Готово' : 'Подогнать под угол';
-  $('#warpBtn').classList.toggle('primary', ph.edit);
-  $('#warpReset').hidden = !ph.warp;
+
+/* ---------- угол: выбрать сторону и уменьшать или увеличивать её кнопками ----------
+   l, r — высота левого и правого края; t, b — ширина верхнего и нижнего (1 — как есть). */
+let side = 'l';
+const keysToWarp = k => [{x:-k.t, y:-k.l}, {x:k.t, y:-k.r}, {x:k.b, y:k.r}, {x:-k.b, y:k.l}];
+const isFlat = k => ['l','r','t','b'].every(n => Math.abs(k[n] - 1) < 1e-6);
+function applyKeys(){ ph.warp = isFlat(ph.keys) ? null : keysToWarp(ph.keys); drawPhoto(); }
+function showAngle(on){ $('#angleBox').hidden = !on; $('#warpBtn').classList.toggle('primary', on); }
+$('#warpBtn').addEventListener('click', () => { const on = $('#angleBox').hidden; hideRuler(); showAngle(on); });
+document.querySelectorAll('.sides .seg-b').forEach(b => b.addEventListener('click', () => {
+  side = b.dataset.side; document.querySelectorAll('.sides .seg-b').forEach(x => x.setAttribute('aria-pressed', x === b)); }));
+function nudge(d){ ph.keys[side] = Math.min(1.6, Math.max(0.4, Math.round((ph.keys[side] + d) * 100) / 100)); applyKeys(); }
+/* кнопку можно удерживать: сторона меняется плавно */
+function holdRepeat(el, fn){
+  let t = null, iv = null;
+  const stop = () => { clearTimeout(t); clearInterval(iv); t = iv = null; };
+  el.addEventListener('pointerdown', e => { e.preventDefault(); fn(); t = setTimeout(() => { iv = setInterval(fn, 90); }, 380); });
+  ['pointerup','pointerleave','pointercancel'].forEach(n => el.addEventListener(n, stop));
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); fn(); } });
 }
-async function leaveEdit(){ if (ph.edit){ ph.edit = false; updateWarpUi(); } if (ph.calib) stopCalib(); await drawPhoto(); }
-$('#warpBtn').addEventListener('click', () => {
-  if (ph.calib) stopCalib();
-  ph.edit = !ph.edit;
-  if (ph.edit && !ph.warp){ ph.warp = DEFAULT_WARP(); toast('Перетащите уголки картины вдоль линий двери, окна или плинтуса.'); }
-  updateWarpUi(); drawPhoto();
+holdRepeat($('#angleMinus'), () => nudge(-0.02));
+holdRepeat($('#anglePlus'), () => nudge(0.02));
+$('#angleReset').addEventListener('click', () => { ph.keys = {l:1, r:1, t:1, b:1}; applyKeys(); });
+$('#angleDone').addEventListener('click', () => showAngle(false));
+
+/* ---------- масштаб: вертикальная линейка на фото ----------
+   Нижний кружок — на пол, верхний — к потолку или на верх двери, вписать высоту в см.
+   Сайт узнаёт масштаб и где пол, и вешает картину центром на 150 см от пола. */
+const R = {x:.5, top:.1, bottom:.9};
+let rDrag = null;
+function layoutRuler(){
+  const pc = v => (v * 100) + '%';
+  const line = $('#rulerLine'); line.style.left = pc(R.x); line.style.top = pc(R.top); line.style.height = pc(R.bottom - R.top);
+  ['#rulerTop','#rulerBottom'].forEach(q => { $(q).style.left = pc(R.x); });
+  $('#rulerTop').style.top = pc(R.top); $('#rulerBottom').style.top = pc(R.bottom);
+  const box = $('#rulerForm'); box.style.top = pc((R.top + R.bottom) / 2);
+  if (R.x > .55){ box.style.left = 'auto'; box.style.right = 'calc(' + pc(1 - R.x) + ' + 26px)'; }
+  else { box.style.right = 'auto'; box.style.left = 'calc(' + pc(R.x) + ' + 26px)'; }
+}
+function showRuler(){
+  showAngle(false);
+  if (ph.rect) R.x = Math.min(.88, Math.max(.12, (ph.rect.L + ph.rect.W / 2) / cv.width));
+  $('#ruler').hidden = false; $('#calibBtn').classList.add('primary'); layoutRuler();
+  $('#scaleNote').textContent = 'Поставьте нижний кружок на пол, верхний — к потолку или на верх двери, прямо там, где будет картина. Впишите высоту и нажмите OK.';
+}
+function hideRuler(){ if ($('#ruler').hidden) return; $('#ruler').hidden = true; $('#calibBtn').classList.remove('primary'); updateScaleNote(); }
+$('#calibBtn').addEventListener('click', () => { $('#ruler').hidden ? showRuler() : hideRuler(); });
+function stageFrac(e){ const r = cv.getBoundingClientRect(); return {x:(e.clientX - r.left) / r.width, y:(e.clientY - r.top) / r.height}; }
+[['#rulerTop','top'], ['#rulerBottom','bottom'], ['#rulerLine','line']].forEach(([sel, what]) => {
+  const el = $(sel);
+  el.addEventListener('pointerdown', e => { e.preventDefault(); const f = stageFrac(e); rDrag = {what, dx:f.x - R.x}; el.setPointerCapture(e.pointerId); });
+  el.addEventListener('pointermove', e => {
+    if (!rDrag) return; const f = stageFrac(e), cl = v => Math.min(.98, Math.max(.02, v));
+    if (rDrag.what === 'top'){ R.top = Math.min(cl(f.y), R.bottom - .05); R.x = cl(f.x); }
+    else if (rDrag.what === 'bottom'){ R.bottom = Math.max(cl(f.y), R.top + .05); R.x = cl(f.x); }
+    else R.x = cl(f.x - rDrag.dx);
+    layoutRuler();
+  });
+  const end = () => { rDrag = null; }; el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
 });
-$('#warpReset').addEventListener('click', () => { ph.warp = null; ph.edit = false; updateWarpUi(); drawPhoto(); });
+$('#rulerForm').addEventListener('submit', e => {
+  e.preventDefault(); const cm = +$('#rulerCm').value;
+  if (!(cm > 0)){ toast('Впишите высоту в сантиметрах, например 270.'); $('#rulerCm').focus(); return; }
+  ph.pxPerCm = (R.bottom - R.top) * cv.height / cm; ph.approx = false; ph.scaleSrc = 'по линейке ' + fmt(cm) + ' см';
+  ph.fine = 1; $('#fine').value = 100; $('#fineOut').textContent = '100%';
+  const y = R.bottom * cv.height - 150 * ph.pxPerCm;
+  ph.pos = {x:R.x, y:Math.min(.95, Math.max(.05, y / cv.height))};
+  $('#rulerCm').blur(); hideRuler(); drawPhoto(); toast('Масштаб задан. Картина висит центром на 150 см от пола.');
+});
+async function leaveEdit(){ hideRuler(); await drawPhoto(); }
 
 function canvasPt(e){ const r = cv.getBoundingClientRect(); return {x:(e.clientX - r.left) * cv.width / r.width, y:(e.clientY - r.top) * cv.height / r.height}; }
 cv.addEventListener('pointerdown', e => {
   const q = canvasPt(e);
-  if (ph.calib){ if (ph.pts.length >= 2) ph.pts = []; ph.pts.push(q); calibStep(); drawPhoto(); return; }
-  if (ph.edit && ph.quad){
-    const r = handleR() * 1.8;
-    const i = ph.quad.findIndex(pt => Math.hypot(pt.x - q.x, pt.y - q.y) <= r);
-    if (i >= 0){ ph.handle = i; cv.setPointerCapture(e.pointerId); return; }
-  }
   if (onPainting(q)){
     ph.drag = {dx:q.x - ph.pos.x*cv.width, dy:q.y - ph.pos.y*cv.height}; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing';
-  } else if (!ph.edit){
-    ph.pos = {x:q.x/cv.width, y:q.y/cv.height}; drawPhoto();
-  }
+  } else { ph.pos = {x:q.x/cv.width, y:q.y/cv.height}; drawPhoto(); }
 });
-cv.addEventListener('pointermove', e => {
-  const q = canvasPt(e);
-  if (ph.handle != null && ph.warp && ph.dims){
-    const cx = ph.pos.x*cv.width, cy = ph.pos.y*cv.height;
-    ph.warp[ph.handle] = {x:(q.x - cx) / (ph.dims.W/2), y:(q.y - cy) / (ph.dims.H/2)};
-    drawPhoto(); return;
-  }
-  if (!ph.drag) return;
+cv.addEventListener('pointermove', e => { if (!ph.drag) return; const q = canvasPt(e);
   ph.pos = {x:(q.x - ph.drag.dx)/cv.width, y:(q.y - ph.drag.dy)/cv.height}; drawPhoto(); });
-const endDrag = () => { ph.drag = null; ph.handle = null; cv.style.cursor = ''; };
+const endDrag = () => { ph.drag = null; cv.style.cursor = ''; };
 cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
 
 $('#roomFile').addEventListener('change', async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try { const r = await fileToData(f, 2000); const im = await getImg(r.data);
-    ph.room = im; ph.sample = false; ph.warp = null; ph.edit = false; updateWarpUi(); ph.pxPerCm = im.width / 350; ph.approx = true; ph.pos = {x:.5, y:.4}; ph.fine = 1; $('#fine').value = 100; $('#fineOut').textContent = '100%';
-    updateScaleNote(); drawPhoto(); startCalib('ceil');
+    ph.room = im; ph.sample = false; ph.keys = {l:1, r:1, t:1, b:1}; ph.warp = null; showAngle(false);
+    ph.pxPerCm = im.width / 350; ph.approx = true; ph.pos = {x:.5, y:.4}; ph.fine = 1; $('#fine').value = 100; $('#fineOut').textContent = '100%';
+    updateScaleNote(); await drawPhoto(); R.top = .1; R.bottom = .9; showRuler();
+    $('#stage').scrollIntoView({block:'start', behavior:'smooth'});
   } catch(err){ toast('Не получилось открыть это фото. Выберите JPG или PNG.'); }
-});
-/* ---------- масштаб: по высоте потолка (главный способ), по двери, по предмету ----------
-   «Потолок» и «дверь»: первая точка у пола, вторая наверху, прямо над местом картины.
-   Так сайт знает и масштаб, и где пол, и вешает картину центром на 150 см от пола. */
-const CALIB = {
-  ceil:{hint:['Нажмите у пола, на плинтус, прямо под местом, где будет картина.', 'Теперь нажмите у потолка над этой же точкой.', 'Выберите высоту потолка.'],
-        lbl:'Высота потолка, см', def:270, chips:true},
-  door:{hint:['Нажмите у пола под дверью.', 'Теперь нажмите на верх дверного проёма.', 'Укажите высоту двери. Обычно это 200 см.'],
-        lbl:'Высота двери, см', def:200, chips:false},
-  obj: {hint:['Нажмите на один край предмета, ширину которого знаете: окна, дивана, комода.', 'Теперь на другой край.', 'Укажите расстояние между отметками.'],
-        lbl:'Расстояние между отметками, см', def:'', chips:false}
-};
-function calibStep(){
-  const m = CALIB[ph.calibMode], n = Math.min(ph.pts.length, 2);
-  $('#calibHint').textContent = m.hint[n];
-  const form = $('#calibForm'); form.hidden = n < 2;
-  if (n === 2){
-    $('#calibLbl').textContent = m.lbl; $('#ceilChips').hidden = !m.chips;
-    const inp = $('#calibCm'); if (!inp.value) inp.value = m.def; inp.placeholder = m.def ? '' : 'например, 80';
-    markChips();
-    if (!m.chips) inp.focus();
-  }
-}
-function markChips(){ const v = +$('#calibCm').value; document.querySelectorAll('#ceilChips .chip').forEach(c => c.setAttribute('aria-pressed', +c.dataset.cm === v)); }
-function setMode(mode){
-  ph.calibMode = mode; ph.pts = []; $('#calibCm').value = '';
-  document.querySelectorAll('.seg-b').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === mode));
-  calibStep(); drawPhoto();
-}
-function startCalib(mode){
-  if (ph.edit){ ph.edit = false; updateWarpUi(); }
-  ph.calib = true; cv.classList.add('calib'); $('#calibBox').hidden = false;
-  setMode(mode || ph.calibMode);
-  $('#calibBox').scrollIntoView({block:'nearest', behavior:'smooth'});
-}
-const stopCalib = () => { ph.calib = false; ph.pts = []; cv.classList.remove('calib'); $('#calibBox').hidden = true; $('#calibCm').value = ''; drawPhoto(); };
-$('#calibBtn').addEventListener('click', () => startCalib());
-document.querySelectorAll('.seg-b').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
-document.querySelectorAll('#ceilChips .chip').forEach(c => c.addEventListener('click', () => { $('#calibCm').value = c.dataset.cm; markChips(); }));
-$('#calibCm').addEventListener('input', markChips);
-$('#calibCancel').addEventListener('click', stopCalib);
-$('#calibForm').addEventListener('submit', e => { e.preventDefault(); const cm = +$('#calibCm').value;
-  if (!(cm > 0) || ph.pts.length < 2){ toast('Введите размер в сантиметрах.'); return; }
-  const [a, b] = ph.pts, d = Math.hypot(b.x - a.x, b.y - a.y);
-  ph.pxPerCm = d / cm; ph.approx = false; ph.fine = 1; $('#fine').value = 100; $('#fineOut').textContent = '100%';
-  if (ph.calibMode === 'obj'){
-    ph.scaleSrc = 'по отметке ' + fmt(cm) + ' см';
-    ph.pos = {x:(a.x + b.x)/2/cv.width, y:Math.max(.15, (a.y + b.y)/2/cv.height - .25)};
-  } else {
-    const floor = a.y > b.y ? a : b;
-    ph.scaleSrc = ph.calibMode === 'ceil' ? 'по высоте потолка ' + fmt(cm/100) + ' м' : 'по высоте двери ' + fmt(cm) + ' см';
-    const y = floor.y - 150 * ph.pxPerCm;
-    ph.pos = {x:floor.x / cv.width, y:Math.min(.95, Math.max(.05, y / cv.height))};
-  }
-  stopCalib(); updateScaleNote(); toast(ph.calibMode === 'obj' ? 'Масштаб задан.' : 'Масштаб задан. Картина висит центром на 150 см от пола.');
 });
 $('#fine').addEventListener('input', e => { ph.fine = e.target.value/100; $('#fineOut').textContent = e.target.value + '%'; drawPhoto(); });
 function saveBlob(blob){

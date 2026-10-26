@@ -75,41 +75,44 @@
   <div class="col col-r">
     <section class="panel" aria-labelledby="h-photo">
       <h2 class="eyebrow" id="h-photo">По фото комнаты</h2>
-      <div class="stage">
+      <label class="btn primary big upload" for="roomFile">Загрузить фото комнаты</label>
+      <input type="file" id="roomFile" accept="image/*">
+      <div class="stage" id="stage">
         <canvas id="photoCanvas" width="1600" height="1000" aria-label="Фото комнаты с картиной. Перетащите картину пальцем или мышью."></canvas>
         <span class="badge" id="roomBadge">Пример комнаты</span>
+        <div class="ruler" id="ruler" hidden>
+          <div class="ruler-line" id="rulerLine" aria-hidden="true"></div>
+          <button type="button" class="ruler-end" id="rulerTop" aria-label="Верхний конец линейки"></button>
+          <button type="button" class="ruler-end" id="rulerBottom" aria-label="Нижний конец линейки"></button>
+          <form class="ruler-box" id="rulerForm">
+            <input type="number" id="rulerCm" min="1" step="1" inputmode="numeric" placeholder="270" aria-label="Высота в сантиметрах">
+            <span>см</span>
+            <button type="submit">OK</button>
+          </form>
+        </div>
       </div>
       <p class="note" id="scaleNote"></p>
-      <div class="tools">
-        <div class="row">
-          <label class="btn" for="roomFile">Загрузить фото комнаты</label>
-          <input type="file" id="roomFile" accept="image/*">
-          <button class="btn" id="calibBtn">Задать масштаб</button>
-          <button class="btn" id="warpBtn">Подогнать под угол</button>
-          <button class="btn ghost" id="warpReset" hidden>Сбросить угол</button>
-          <button class="btn primary" id="shareBtn">Поделиться</button>
-          <button class="btn ghost" id="saveBtn">Сохранить картинку</button>
+      <div class="angle-box" id="angleBox" hidden>
+        <div class="seg sides" role="group" aria-label="Какую сторону менять">
+          <button type="button" class="seg-b" data-side="l" aria-pressed="true">Слева</button>
+          <button type="button" class="seg-b" data-side="r" aria-pressed="false">Справа</button>
+          <button type="button" class="seg-b" data-side="t" aria-pressed="false">Сверху</button>
+          <button type="button" class="seg-b" data-side="b" aria-pressed="false">Снизу</button>
         </div>
-        <div class="calib-box" id="calibBox" hidden>
-          <div class="seg" role="group" aria-label="Как задать масштаб">
-            <button type="button" class="seg-b" data-mode="ceil" aria-pressed="true">По потолку</button>
-            <button type="button" class="seg-b" data-mode="door" aria-pressed="false">По двери</button>
-            <button type="button" class="seg-b" data-mode="obj" aria-pressed="false">По предмету</button>
-          </div>
-          <p class="note calib-hint" id="calibHint"></p>
-          <form id="calibForm" hidden>
-            <div class="chips" id="ceilChips">
-              <button type="button" class="chip" data-cm="250">2,5 м</button>
-              <button type="button" class="chip" data-cm="270">2,7 м</button>
-              <button type="button" class="chip" data-cm="300">3 м</button>
-            </div>
-            <label class="f"><span id="calibLbl">Высота потолка, см</span><input type="number" id="calibCm" min="1" step="1" inputmode="decimal"></label>
-            <button class="btn primary" type="submit">Применить</button>
-          </form>
-          <button class="btn ghost" type="button" id="calibCancel">Отмена</button>
+        <div class="angle-row">
+          <button type="button" class="btn step" id="angleMinus" aria-label="Уменьшить сторону">−</button>
+          <button type="button" class="btn step" id="anglePlus" aria-label="Увеличить сторону">+</button>
+          <button type="button" class="btn ghost" id="angleReset">Ровно</button>
+          <button type="button" class="btn primary" id="angleDone">Готово</button>
         </div>
-        <div class="slider"><span>Поправка на перспективу</span><input type="range" id="fine" min="50" max="150" value="100"><output id="fineOut">100%</output></div>
       </div>
+      <div class="toolbar">
+        <button class="btn" id="calibBtn">Масштаб</button>
+        <button class="btn" id="warpBtn">Угол</button>
+        <button class="btn primary" id="shareBtn">Поделиться</button>
+        <button class="btn" id="saveBtn">Сохранить</button>
+      </div>
+      <div class="slider"><span>Поправка размера</span><input type="range" id="fine" min="50" max="150" value="100"><output id="fineOut">100%</output></div>
     </section>
   </div>
 </div>
