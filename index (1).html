@@ -1,0 +1,636 @@
+<title>Примерка картин</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tenor+Sans&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: gallery wall — a quiet grey-green "wall" ground, works listed like museum labels; on wide screens controls left, the room preview right */
+:root{
+  --bg:#E9ECE8; --surface:#F7F8F5; --ink:#1A201E; --muted:#5B6560; --line:#CBD1CC;
+  --accent:#2C45B0; --accent-ink:#FFFFFF; --accent-soft:#DCE2F7;
+  --ok:#2B7A4B; --off:#9A5B17;
+  --ov-bg:rgba(16,20,19,.72); --ov-fg:#FFFFFF; --ov-line:rgba(255,255,255,.28);
+  --f-display:"Tenor Sans","Optima","Candara",Georgia,serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141817; --surface:#1D2220; --ink:#E6EAE7; --muted:#9BA49F; --line:#323936;
+  --accent:#8EA0FF; --accent-ink:#0D1330; --accent-soft:#252C4D; --ok:#6FCB93; --off:#E2A35C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141817; --surface:#1D2220; --ink:#E6EAE7; --muted:#9BA49F; --line:#323936;
+  --accent:#8EA0FF; --accent-ink:#0D1330; --accent-soft:#252C4D; --ok:#6FCB93; --off:#E2A35C; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.app{max-width:1120px;margin:0 auto;display:grid;gap:20px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:900px){.app{grid-template-columns:minmax(0,400px) minmax(0,1fr);align-items:start}
+  .col-r{position:sticky;top:16px}}
+.col{display:flex;flex-direction:column;gap:18px;min-width:0}
+
+header h1{font:400 clamp(28px,5vw,40px)/1.05 var(--f-display);margin:0 0 6px;letter-spacing:.01em;text-wrap:balance}
+header p{margin:0;color:var(--muted);max-width:58ch}
+
+.eyebrow{font:500 11px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+
+/* works strip */
+.strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.work{flex:0 0 auto;width:96px;display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.work .pic{height:96px;width:96px;border-radius:6px;background:var(--bg);display:grid;place-items:center;border:2px solid transparent;overflow:hidden}
+.work img{max-height:84px;max-width:84px;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.work[aria-pressed="true"] .pic{border-color:var(--accent)}
+.work .cap{font-size:12px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.work .dim{font:12px var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.work.add .pic{border:1.5px dashed var(--line);font:300 34px/1 var(--f-body);color:var(--muted)}
+
+/* museum label editor */
+.label{display:grid;gap:12px}
+.label .title-row{display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap}
+.label .outer{font:13px var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fields .wide{grid-column:1/-1}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+input[type=text],input[type=number],select{font:15px var(--f-body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:9px 10px;width:100%;min-width:0}
+input[type=number]{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+button.btn,label.btn{font:500 14px var(--f-body);border-radius:8px;padding:10px 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+button.btn:hover,label.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:none}
+.btn.danger{color:var(--off)}
+.btn.big{width:100%;justify-content:center;padding:15px 16px;font-size:16px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+.status{font-size:13px;margin:10px 0 0;display:flex;gap:8px;align-items:flex-start}
+.status::before{content:"";flex:0 0 8px;height:8px;border-radius:50%;margin-top:6px;background:var(--muted)}
+.status[data-state="ok"]::before{background:var(--ok)}
+.status[data-state="off"]::before{background:var(--off)}
+.note{font-size:12.5px;color:var(--muted);margin:8px 0 0}
+
+/* photo mode */
+.stage{position:relative;border-radius:8px;overflow:hidden;background:var(--bg);border:1px solid var(--line)}
+#photoCanvas{display:block;width:100%;height:auto;touch-action:none;cursor:grab}
+#photoCanvas.calib{cursor:crosshair}
+.stage .badge{position:absolute;left:10px;top:10px;font:12px var(--f-body);background:var(--ov-bg);color:var(--ov-fg);padding:4px 8px;border-radius:999px}
+.tools{display:grid;gap:10px;margin-top:12px}
+.slider{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}
+.slider input{flex:1;min-width:0;accent-color:var(--accent)}
+.slider output{font:13px var(--f-mono);min-width:4ch;text-align:right;color:var(--ink)}
+#calibForm{display:flex;gap:8px;align-items:end;flex-wrap:wrap}
+#calibForm label.f{flex:1 1 140px}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:8px;font-size:14px;z-index:50;max-width:calc(100% - 32px)}
+
+/* AR overlay (sits over the live camera, one look in both themes) */
+.xr-canvas{position:fixed;inset:0;z-index:-1}
+#xrOverlay{position:fixed;inset:0;z-index:100;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;
+  padding:calc(12px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));color:var(--ov-fg);font-family:var(--f-body)}
+#xrOverlay > *{pointer-events:auto}
+.xr-top{position:relative;z-index:1;display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.xr-hint{background:var(--ov-bg);padding:9px 13px;border-radius:999px;font-size:14px;max-width:75%}
+.xr-btn{background:var(--ov-bg);color:var(--ov-fg);border:1px solid var(--ov-line);border-radius:999px;padding:9px 14px;font:500 14px var(--f-body)}
+.xr-panel{background:var(--ov-bg);border-radius:14px;padding:12px;display:grid;gap:10px}
+.xr-info{font-size:13px;line-height:1.35}
+.xr-info b{font-weight:600}
+.xr-info .mono{font-family:var(--f-mono)}
+.xr-debug{font:11px/1.35 var(--f-mono);color:#ffd84d;white-space:pre-wrap;word-break:break-word}
+.xr-strip{display:flex;gap:8px;overflow-x:auto}
+.xr-strip button{flex:0 0 auto;width:56px;height:56px;border-radius:8px;border:2px solid transparent;background:rgba(255,255,255,.1);padding:3px;display:grid;place-items:center}
+.xr-strip button[aria-pressed="true"]{border-color:var(--ov-fg)}
+.xr-strip img{max-width:46px;max-height:46px}
+.xr-actions{display:flex;gap:8px;flex-wrap:wrap}
+.xr-actions .xr-btn{flex:1 1 auto}
+
+#xrOverlay > #xrAim{pointer-events:none;position:fixed;left:50%;top:60%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;
+  border:3px solid rgba(200,200,200,.85);box-shadow:0 0 0 1px rgba(0,0,0,.35),inset 0 0 0 1px rgba(0,0,0,.35)}
+#xrAim::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:currentColor}
+#xrAim{color:rgba(200,200,200,.85)}
+#xrOverlay > #xrAim[data-state="floor"]{border-color:#ffc94d;color:#ffc94d}
+#xrOverlay > #xrAim[data-state="wall"]{border-color:#fff;color:#fff}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="app">
+  <div class="col">
+    <header>
+      <h1>Примерка картин</h1>
+      <p>Картина в натуральную величину на вашей стене: через камеру телефона или по фото комнаты.</p>
+    </header>
+
+    <section class="panel" aria-labelledby="h-works">
+      <h2 class="eyebrow" id="h-works">Картины</h2>
+      <div class="strip" id="strip"></div>
+      <input type="file" id="addFile" accept="image/*">
+      <p class="note" id="storeNote" hidden>Фото слишком большие, чтобы запомнить их в браузере. После перезагрузки страницы их нужно будет добавить заново.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="h-ar">
+      <h2 class="eyebrow" id="h-ar">Через камеру</h2>
+      <button class="btn primary big" id="arStart" disabled>Примерить на стене</button>
+      <p class="status" id="arStatus" data-state="">Проверяю, поддерживает ли телефон примерку через камеру…</p>
+      <p class="note">Держите телефон почти прямо. Ниже центра экрана будет прицел: наведите его на пол у самой стены и подождите, пока он станет жёлтым, затем нажмите на экран: картина повиснет над этой точкой, центр будет на высоте 150 см. Потом поправьте её кнопками «Выше» и «Ниже». Если телефон распознал саму стену, прицел станет белым, и картину можно повесить прямо в эту точку.</p>
+    </section>
+
+    <section class="panel label" aria-labelledby="h-label">
+      <div class="title-row">
+        <h2 class="eyebrow" id="h-label" style="margin:0">Этикетка выбранной картины</h2>
+        <span class="outer" id="outerSize"></span>
+      </div>
+      <div class="fields">
+        <label class="f wide">Название<input type="text" id="pName" autocomplete="off"></label>
+        <label class="f">Ширина, см<input type="number" id="pW" min="1" max="1000" step="0.5" inputmode="decimal"></label>
+        <label class="f">Высота, см<input type="number" id="pH" min="1" max="1000" step="0.5" inputmode="decimal"></label>
+        <label class="f wide">Оформление<select id="pFrame"></select></label>
+      </div>
+      <label class="chk"><input type="checkbox" id="pLock" checked> Сохранять пропорции фото</label>
+      <div class="row">
+        <label class="btn ghost" for="replaceFile">Заменить фото</label>
+        <input type="file" id="replaceFile" accept="image/*">
+        <button class="btn ghost danger" id="pDelete">Удалить</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="col col-r">
+    <section class="panel" aria-labelledby="h-photo">
+      <h2 class="eyebrow" id="h-photo">По фото комнаты</h2>
+      <div class="stage">
+        <canvas id="photoCanvas" width="1600" height="1000" aria-label="Фото комнаты с картиной. Перетащите картину пальцем или мышью."></canvas>
+        <span class="badge" id="roomBadge">Пример комнаты</span>
+      </div>
+      <p class="note" id="scaleNote"></p>
+      <div class="tools">
+        <div class="row">
+          <label class="btn" for="roomFile">Загрузить фото комнаты</label>
+          <input type="file" id="roomFile" accept="image/*">
+          <button class="btn" id="calibBtn">Задать масштаб</button>
+          <button class="btn ghost" id="saveBtn">Сохранить картинку</button>
+        </div>
+        <form id="calibForm" hidden>
+          <label class="f">Расстояние между отметками, см<input type="number" id="calibCm" min="1" step="1" inputmode="decimal" placeholder="например, 80"></label>
+          <button class="btn primary" type="submit">Применить</button>
+          <button class="btn ghost" type="button" id="calibCancel">Отмена</button>
+        </form>
+        <div class="slider"><span>Поправка на перспективу</span><input type="range" id="fine" min="50" max="150" value="100"><output id="fineOut">100%</output></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="xrOverlay" hidden>
+  <div id="xrAim" aria-hidden="true"></div>
+  <div class="xr-top">
+    <div class="xr-hint" id="xrHint">Ищу пол…</div>
+    <button class="xr-btn" id="xrExit">Выйти</button>
+  </div>
+  <div class="xr-panel" id="xrPanel">
+    <div class="xr-info" id="xrInfo"></div>
+    <div class="xr-debug" id="xrDebug"></div>
+    <div class="xr-strip" id="xrStrip"></div>
+    <div class="xr-actions">
+      <button class="xr-btn" id="xrUp">Выше</button>
+      <button class="xr-btn" id="xrDown">Ниже</button>
+      <button class="xr-btn" id="xrFront">Перед собой</button>
+      <button class="xr-btn" id="xrMove">Переставить</button>
+      <button class="xr-btn" id="xrRemove">Убрать</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const STORE = 'primerka-v1';
+const FRAMES = {
+  none:  {label:'Без рамы (подрамник)', w:0,   mat:0, color:null},
+  black: {label:'Тонкая чёрная рама, 2 см', w:2,   mat:0, color:'#1b1b1b'},
+  oak:   {label:'Дубовая рама, 3,5 см', w:3.5, mat:0, color:'#a9824f'},
+  white: {label:'Белая рама, 2,5 см',  w:2.5, mat:0, color:'#f1f0ec'},
+  mat:   {label:'Чёрная рама + паспарту 6 см', w:2, mat:6, color:'#1b1b1b'}
+};
+const fmt = n => (Math.round(n*10)/10).toString().replace('.', ',');
+const outer = p => { const f = FRAMES[p.frame] || FRAMES.none; const a = 2*(f.w + f.mat); return {w:p.w + a, h:p.h + a}; };
+
+const state = {paintings:[], sel:0};
+const imgCache = new Map();
+function getImg(src){
+  if (imgCache.has(src)) return imgCache.get(src);
+  const pr = new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+  imgCache.set(src, pr); return pr;
+}
+function toast(msg){
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; t.setAttribute('role','status');
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3200);
+}
+
+/* ---------- sample painting ---------- */
+function samplePainting(){
+  const c = document.createElement('canvas'); c.width = 600; c.height = 800; const x = c.getContext('2d');
+  x.fillStyle = '#22305a'; x.fillRect(0,0,600,800);
+  x.filter = 'blur(7px)';
+  x.fillStyle = '#d6a03c'; x.fillRect(60,70,480,330);
+  x.fillStyle = '#7d2a35'; x.fillRect(60,440,480,170);
+  x.fillStyle = '#3a4d86'; x.fillRect(60,645,480,95);
+  x.filter = 'none';
+  const d = x.getImageData(0,0,600,800); for (let i=0;i<d.data.length;i+=4){ const n=(Math.random()-.5)*18; d.data[i]+=n; d.data[i+1]+=n; d.data[i+2]+=n; } x.putImageData(d,0,0);
+  return {id:'sample', name:'Пример — «Цветовые поля»', w:60, h:80, ratio:800/600, frame:'oak', img:c.toDataURL('image/jpeg',0.88), sample:true};
+}
+
+/* ---------- storage ---------- */
+function persist(){
+  try { localStorage.setItem(STORE, JSON.stringify({paintings:state.paintings, sel:state.sel})); $('#storeNote').hidden = true; }
+  catch(e){ $('#storeNote').hidden = false; }
+}
+function restore(){
+  try { const s = JSON.parse(localStorage.getItem(STORE) || 'null');
+    if (s && Array.isArray(s.paintings) && s.paintings.length){ state.paintings = s.paintings; state.sel = Math.min(s.sel||0, s.paintings.length-1); return true; } }
+  catch(e){}
+  return false;
+}
+function fileToData(file, max){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file); const im = new Image();
+    im.onload = () => { const k = Math.min(1, max/Math.max(im.naturalWidth, im.naturalHeight));
+      const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth*k); c.height = Math.round(im.naturalHeight*k);
+      c.getContext('2d').drawImage(im,0,0,c.width,c.height); URL.revokeObjectURL(url);
+      res({data:c.toDataURL('image/jpeg',0.86), w:c.width, h:c.height}); };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('bad image')); };
+    im.src = url;
+  });
+}
+const cur = () => state.paintings[state.sel];
+
+/* ---------- works strip + label ---------- */
+function renderStrip(){
+  const s = $('#strip'); s.textContent = '';
+  state.paintings.forEach((p, i) => {
+    const b = document.createElement('button'); b.className = 'work'; b.type = 'button'; b.setAttribute('aria-pressed', i === state.sel);
+    const pic = document.createElement('span'); pic.className = 'pic'; const im = document.createElement('img'); im.src = p.img; im.alt = ''; pic.appendChild(im);
+    const cap = document.createElement('span'); cap.className = 'cap'; cap.textContent = p.name;
+    const dim = document.createElement('span'); dim.className = 'dim'; dim.textContent = fmt(p.w) + ' × ' + fmt(p.h) + ' см';
+    b.append(pic, cap, dim); b.onclick = () => { state.sel = i; persist(); renderAll(); };
+    s.appendChild(b);
+  });
+  const add = document.createElement('label'); add.className = 'work add'; add.htmlFor = 'addFile'; add.tabIndex = 0;
+  add.innerHTML = '<span class="pic">+</span><span class="cap">Добавить</span><span class="dim">фото картины</span>';
+  add.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#addFile').click(); } };
+  s.appendChild(add);
+}
+function renderLabel(){
+  const p = cur(); const dis = !p;
+  ['#pName','#pW','#pH','#pFrame','#pDelete'].forEach(q => $(q).disabled = dis);
+  if (!p) { $('#outerSize').textContent = ''; return; }
+  $('#pName').value = p.name; $('#pW').value = p.w; $('#pH').value = p.h; $('#pFrame').value = p.frame;
+  const o = outer(p); $('#outerSize').textContent = p.frame === 'none' ? fmt(p.w)+' × '+fmt(p.h)+' см' : 'в раме ' + fmt(o.w)+' × '+fmt(o.h)+' см';
+}
+function renderAll(){ renderStrip(); renderLabel(); drawPhoto(); renderXrStrip(); }
+
+Object.entries(FRAMES).forEach(([k, f]) => { const o = document.createElement('option'); o.value = k; o.textContent = f.label; $('#pFrame').appendChild(o); });
+$('#pName').addEventListener('input', e => { cur().name = e.target.value || 'Без названия'; persist(); renderStrip(); });
+$('#pW').addEventListener('change', e => { const p = cur(); const v = Math.max(1, Math.min(1000, +e.target.value || p.w));
+  p.w = v; if ($('#pLock').checked) p.h = Math.round(v * p.ratio * 10)/10; persist(); renderAll(); });
+$('#pH').addEventListener('change', e => { const p = cur(); const v = Math.max(1, Math.min(1000, +e.target.value || p.h));
+  p.h = v; if ($('#pLock').checked) p.w = Math.round(v / p.ratio * 10)/10; persist(); renderAll(); });
+$('#pFrame').addEventListener('change', e => { cur().frame = e.target.value; persist(); renderAll(); });
+$('#pDelete').addEventListener('click', () => { state.paintings.splice(state.sel, 1); state.sel = Math.max(0, state.sel-1);
+  if (!state.paintings.length) state.paintings.push(samplePainting()); persist(); renderAll(); });
+$('#addFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { const r = await fileToData(f, 1400); const ratio = r.h / r.w; const w = 50;
+    state.paintings.push({id:'p'+Date.now(), name:f.name.replace(/\.[^.]+$/, '') || 'Без названия', w, h:Math.round(w*ratio*10)/10, ratio, frame:'none', img:r.data});
+    state.sel = state.paintings.length-1; persist(); renderAll(); toast('Картина добавлена. Укажите её реальный размер.'); $('#pW').focus();
+  } catch(err){ toast('Не получилось открыть этот файл. Выберите фото в формате JPG или PNG.'); }
+});
+$('#replaceFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { const r = await fileToData(f, 1400); const p = cur(); p.img = r.data; p.ratio = r.h/r.w; if ($('#pLock').checked) p.h = Math.round(p.w*p.ratio*10)/10; p.sample = false; persist(); renderAll(); }
+  catch(err){ toast('Не получилось открыть этот файл. Выберите фото в формате JPG или PNG.'); }
+});
+
+/* ---------- photo mode ---------- */
+const cv = $('#photoCanvas'), ctx = cv.getContext('2d');
+const ph = {room:null, sample:true, pxPerCm:3.2, scaleSrc:'по дивану шириной 200 см', approx:false, pos:{x:.5, y:.33}, fine:1, calib:false, pts:[], drag:null, rect:null};
+function sampleRoom(){
+  const c = document.createElement('canvas'); c.width = 1600; c.height = 1000; const x = c.getContext('2d');
+  const g = x.createLinearGradient(0,0,0,780); g.addColorStop(0,'#d3d5cf'); g.addColorStop(1,'#c4c7c0'); x.fillStyle = g; x.fillRect(0,0,1600,780);
+  const fl = x.createLinearGradient(0,780,0,1000); fl.addColorStop(0,'#86684b'); fl.addColorStop(1,'#6d533b'); x.fillStyle = fl; x.fillRect(0,780,1600,220);
+  x.strokeStyle = 'rgba(0,0,0,.12)'; x.lineWidth = 2; for (let i=0;i<9;i++){ x.beginPath(); x.moveTo(0,800+i*26); x.lineTo(1600,800+i*26); x.stroke(); }
+  x.fillStyle = '#ecebe6'; x.fillRect(0,762,1600,22);
+  // sofa: 640 px = 200 cm
+  x.fillStyle = 'rgba(0,0,0,.18)'; x.beginPath(); x.ellipse(800,800,360,22,0,0,Math.PI*2); x.fill();
+  x.fillStyle = '#566771'; const rr = (X,Y,W,H,R) => { x.beginPath(); x.roundRect(X,Y,W,H,R); x.fill(); };
+  rr(500,560,600,120,18); rr(480,640,640,130,16); rr(468,600,70,170,20); rr(1062,600,70,170,20);
+  x.fillStyle = '#4b5b64'; rr(520,650,280,60,10); rr(800,650,280,60,10);
+  x.fillStyle = '#2b2b2b'; x.fillRect(500,770,14,18); x.fillRect(1086,770,14,18);
+  // floor lamp
+  x.fillStyle = '#2f2f2f'; x.fillRect(1290,420,6,350); x.fillRect(1260,768,66,8);
+  x.fillStyle = '#e8dcc2'; x.beginPath(); x.moveTo(1240,420); x.lineTo(1346,420); x.lineTo(1320,340); x.lineTo(1266,340); x.closePath(); x.fill();
+  return c;
+}
+const SAMPLE_ROOM = sampleRoom();
+function roomSrc(){ return ph.room || SAMPLE_ROOM; }
+function updateScaleNote(){
+  $('#roomBadge').hidden = !ph.sample;
+  $('#scaleNote').textContent = ph.approx
+    ? 'Масштаб пока приблизительный. Нажмите «Задать масштаб» и отметьте края предмета известной ширины: двери, окна, дивана.'
+    : 'Масштаб задан ' + ph.scaleSrc + '. Картину можно перетаскивать.';
+}
+async function drawPhoto(){
+  const room = roomSrc();
+  if (cv.width !== room.width || cv.height !== room.height){ cv.width = room.width; cv.height = room.height; }
+  ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(room,0,0);
+  const p = cur(); ph.rect = null;
+  if (p){
+    let im; try { im = await getImg(p.img); } catch(e){ im = null; }
+    if (im && cur() === p){
+      ctx.clearRect(0,0,cv.width,cv.height); ctx.drawImage(room,0,0);
+      ph.rect = drawFramed(ctx, p, im, ph.pos.x*cv.width, ph.pos.y*cv.height, ph.pxPerCm*ph.fine);
+    }
+  }
+  if (ph.calib){
+    ctx.save(); ctx.strokeStyle = '#ffd400'; ctx.fillStyle = '#ffd400'; ctx.lineWidth = Math.max(3, cv.width/400);
+    ph.pts.forEach(q => { ctx.beginPath(); ctx.arc(q.x,q.y,ctx.lineWidth*3,0,Math.PI*2); ctx.fill(); });
+    if (ph.pts.length === 2){ ctx.beginPath(); ctx.moveTo(ph.pts[0].x,ph.pts[0].y); ctx.lineTo(ph.pts[1].x,ph.pts[1].y); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+function drawFramed(x, p, im, cx, cy, k){
+  const f = FRAMES[p.frame] || FRAMES.none; const o = outer(p);
+  const W = o.w*k, H = o.h*k, L = cx - W/2, T = cy - H/2;
+  x.save();
+  x.shadowColor = 'rgba(0,0,0,.38)'; x.shadowBlur = Math.max(6, W*0.05); x.shadowOffsetY = Math.max(3, W*0.025);
+  x.fillStyle = f.color || '#2a2a2a'; x.fillRect(L,T,W,H);
+  x.restore();
+  if (f.w){ x.strokeStyle = 'rgba(0,0,0,.35)'; x.lineWidth = Math.max(1, k*0.3); x.strokeRect(L + f.w*k, T + f.w*k, W - 2*f.w*k, H - 2*f.w*k); }
+  if (f.mat){ x.fillStyle = '#f4f3ef'; x.fillRect(L + f.w*k, T + f.w*k, W - 2*f.w*k, H - 2*f.w*k); }
+  const a = (f.w + f.mat)*k; x.drawImage(im, L + a, T + a, p.w*k, p.h*k);
+  return {L, T, W, H};
+}
+function canvasPt(e){ const r = cv.getBoundingClientRect(); return {x:(e.clientX - r.left) * cv.width / r.width, y:(e.clientY - r.top) * cv.height / r.height}; }
+cv.addEventListener('pointerdown', e => {
+  const q = canvasPt(e);
+  if (ph.calib){ if (ph.pts.length >= 2) ph.pts = []; ph.pts.push(q); if (ph.pts.length === 2){ $('#calibForm').hidden = false; $('#calibCm').focus(); } drawPhoto(); return; }
+  const r = ph.rect;
+  if (r && q.x >= r.L && q.x <= r.L + r.W && q.y >= r.T && q.y <= r.T + r.H){
+    ph.drag = {dx:q.x - ph.pos.x*cv.width, dy:q.y - ph.pos.y*cv.height}; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing';
+  } else {
+    ph.pos = {x:q.x/cv.width, y:q.y/cv.height}; drawPhoto();
+  }
+});
+cv.addEventListener('pointermove', e => { if (!ph.drag) return; const q = canvasPt(e);
+  ph.pos = {x:(q.x - ph.drag.dx)/cv.width, y:(q.y - ph.drag.dy)/cv.height}; drawPhoto(); });
+const endDrag = () => { ph.drag = null; cv.style.cursor = ''; };
+cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+
+$('#roomFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { const r = await fileToData(f, 2000); const im = await getImg(r.data);
+    ph.room = im; ph.sample = false; ph.pxPerCm = im.width / 350; ph.approx = true; ph.pos = {x:.5, y:.4}; ph.fine = 1; $('#fine').value = 100; $('#fineOut').textContent = '100%';
+    updateScaleNote(); drawPhoto(); toast('Фото загружено. Теперь задайте масштаб.');
+  } catch(err){ toast('Не получилось открыть это фото. Выберите JPG или PNG.'); }
+});
+$('#calibBtn').addEventListener('click', () => { ph.calib = true; ph.pts = []; cv.classList.add('calib'); $('#calibForm').hidden = true;
+  toast('Нажмите на фото в двух точках: на краях предмета, ширину которого знаете.'); drawPhoto(); });
+const stopCalib = () => { ph.calib = false; ph.pts = []; cv.classList.remove('calib'); $('#calibForm').hidden = true; drawPhoto(); };
+$('#calibCancel').addEventListener('click', stopCalib);
+$('#calibForm').addEventListener('submit', e => { e.preventDefault(); const cm = +$('#calibCm').value;
+  if (!(cm > 0) || ph.pts.length < 2){ toast('Введите расстояние в сантиметрах.'); return; }
+  const d = Math.hypot(ph.pts[1].x - ph.pts[0].x, ph.pts[1].y - ph.pts[0].y);
+  ph.pxPerCm = d / cm; ph.approx = false; ph.scaleSrc = 'по отметке ' + fmt(cm) + ' см'; ph.pos = {x:(ph.pts[0].x+ph.pts[1].x)/2/cv.width, y:Math.max(.15,(ph.pts[0].y+ph.pts[1].y)/2/cv.height - .25)};
+  $('#calibCm').value = ''; stopCalib(); updateScaleNote(); toast('Масштаб задан.'); });
+$('#fine').addEventListener('input', e => { ph.fine = e.target.value/100; $('#fineOut').textContent = e.target.value + '%'; drawPhoto(); });
+$('#saveBtn').addEventListener('click', async () => {
+  const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.9));
+  if (!blob){ toast('Не получилось подготовить картинку.'); return; }
+  if (window.claude && window.claude.use){
+    let dl = null; try { dl = await window.claude.use('downloads'); } catch(e){}
+    if (!dl){ toast('Здесь сохранение недоступно. Сделайте скриншот экрана.'); return; }
+    try { await dl.save({filename:'primerka.jpg', data:blob}); }
+    catch(err){ if (err && err.code !== 'declined') toast('Не удалось сохранить. Сделайте скриншот экрана.'); }
+    return;
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'primerka.jpg'; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+});
+
+/* ---------- AR (WebXR) ---------- */
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+async function checkXR(){
+  const st = $('#arStatus'), btn = $('#arStart');
+  let ok = false;
+  try { ok = !!(navigator.xr && window.THREE && await navigator.xr.isSessionSupported('immersive-ar')); } catch(e){ ok = false; }
+  if (ok){ btn.disabled = false; st.dataset.state = 'ok'; st.textContent = 'Телефон поддерживает примерку через камеру.'; return; }
+  st.dataset.state = 'off';
+  let embedded = false; try { embedded = window.top !== window.self; } catch(e){ embedded = true; }
+  st.textContent = isIOS ? 'На iPhone браузеры пока не дают сайтам доступ к AR. Используйте примерку по фото.'
+    : embedded ? 'В этом окне доступ к камере закрыт. Откройте сайт по прямому адресу в Chrome на Android-телефоне.'
+    : 'Этот браузер не поддерживает AR. Нужен Chrome на Android-телефоне с «Сервисами Google Play для AR».';
+}
+
+let renderer, scene, camera, session, refSpace, hitSource, wallRing, floorRing, shadowTex;
+let testCube = null, dbg = {hits:0, kind:'—', frames:0, tris:0}, viewerSpace = null, hitPending = false, aimState = null, hangH = 1.5, infoAt = 0, active = null, placed = [], floorY = null, lastHit = null, lastView = null, hintKey = '';
+const M = window.THREE ? new THREE.Matrix4() : null;
+const V = window.THREE ? {pos:new THREE.Vector3(), n:new THREE.Vector3(), q:new THREE.Quaternion(), s:new THREE.Vector3(), cam:new THREE.Vector3(), tmp:new THREE.Vector3()} : null;
+const texCache = new Map();
+
+function makeShadowTex(){
+  const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+  x.shadowColor = 'rgba(0,0,0,1)'; x.shadowBlur = 28; x.fillStyle = 'rgba(0,0,0,1)'; x.fillRect(38,38,180,180);
+  const t = new THREE.CanvasTexture(c); return t;
+}
+function initThree(){
+  renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+  renderer.setPixelRatio(window.devicePixelRatio); renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true; renderer.domElement.className = 'xr-canvas'; document.body.appendChild(renderer.domElement);
+  scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 40);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x777777, 1.0));
+  const d = new THREE.DirectionalLight(0xffffff, 0.5); d.position.set(0.4, 1, 0.7); scene.add(d);
+  const ringMat = c => new THREE.MeshBasicMaterial({color:c, transparent:true, opacity:.9, depthTest:false});
+  wallRing = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.08, 40), ringMat(0xffffff));
+  floorRing = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.08, 40).rotateX(-Math.PI/2), ringMat(0xffc94d));
+  wallRing.renderOrder = floorRing.renderOrder = 10; wallRing.visible = floorRing.visible = false; floorRing.matrixAutoUpdate = false;
+  scene.add(wallRing, floorRing); shadowTex = makeShadowTex();
+}
+async function textureFor(p){
+  if (texCache.has(p.img)) return texCache.get(p.img);
+  const im = await getImg(p.img); const t = new THREE.Texture(im); t.needsUpdate = true; t.anisotropy = 4;
+  texCache.set(p.img, t); return t;
+}
+function buildGroup(p, tex){
+  const g = new THREE.Group(); const f = FRAMES[p.frame] || FRAMES.none; const o = outer(p); const cm = 0.01; const depth = f.w ? 0.03 : 0.02;
+  const shMat = new THREE.MeshBasicMaterial({map:shadowTex, transparent:true, depthWrite:false, opacity:.5}); shMat.userData.base = .5;
+  const sh = new THREE.Mesh(new THREE.PlaneGeometry(o.w*cm*1.3, o.h*cm*1.3), shMat); sh.position.set(0, -o.h*cm*0.025, 0.002); g.add(sh);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(o.w*cm, o.h*cm, depth), new THREE.MeshStandardMaterial({color:new THREE.Color(f.color || '#2a2a2a'), roughness:.75}));
+  body.position.z = depth/2; g.add(body);
+  if (f.mat){ const m = new THREE.Mesh(new THREE.PlaneGeometry((p.w + 2*f.mat)*cm, (p.h + 2*f.mat)*cm), new THREE.MeshBasicMaterial({color:0xf4f3ef})); m.position.z = depth + 0.0008; g.add(m); }
+  const pic = new THREE.Mesh(new THREE.PlaneGeometry(p.w*cm, p.h*cm), new THREE.MeshBasicMaterial({map:tex})); pic.position.z = depth + 0.0016; g.add(pic);
+  g.userData.p = p; g.visible = false; return g;
+}
+function setOpacity(g, o){
+  g.traverse(m => { if (!m.material) return; const b = m.material.userData.base || 1; m.material.transparent = o < 1 || b < 1; m.material.opacity = o*b; m.material.needsUpdate = true; });
+}
+async function startAiming(p){
+  const tex = await textureFor(p);
+  if (active){ scene.remove(active); }
+  active = buildGroup(p, tex); setOpacity(active, .6); scene.add(active); updateXrInfo(); renderXrStrip();
+}
+function placeActive(){
+  if (!active) return; setOpacity(active, 1); placed.push(active); active = null; hintKey = ''; updateXrInfo();
+}
+function orient(g, pos, n){ g.position.copy(pos).addScaledVector(n, 0.004); V.tmp.copy(g.position).add(n); g.lookAt(V.tmp); g.visible = true; }
+function setHint(key, text){ if (key === hintKey) return; hintKey = key; $('#xrHint').textContent = text; }
+function heightText(g){
+  if (!g) return '';
+  if (floorY === null) return 'Покажите камере пол на пару секунд, и я посчитаю высоту.';
+  const c = Math.round((g.position.y - floorY)*100);
+  return 'Центр на высоте <span class="mono">' + c + ' см</span> от пола. Обычно вешают на 145–155 см.';
+}
+function updateXrInfo(){
+  const g = active || placed[placed.length-1]; const el = $('#xrInfo');
+  if (!g){ el.innerHTML = 'Выберите картину ниже.'; return; }
+  const p = g.userData.p; const o = outer(p);
+  el.innerHTML = '<b></b> · <span class="mono">' + fmt(o.w) + ' × ' + fmt(o.h) + ' см</span><br>' + heightText(g);
+  el.querySelector('b').textContent = p.name;
+}
+function setAim(st){ if (st === aimState) return; aimState = st; $('#xrAim').dataset.state = st; }
+function onFrame(t, frame){
+  if (frame && !hitSource && !hitPending && viewerSpace){
+    const vp0 = frame.getViewerPose(refSpace);
+    if (vp0 && vp0.views.length){
+      hitPending = true; const sess = frame.session;
+      const dy = -0.2 / vp0.views[0].projectionMatrix[5];
+      let req;
+      try { req = sess.requestHitTestSource({space:viewerSpace, offsetRay:new XRRay({x:0,y:0,z:0,w:1}, {x:0,y:dy,z:-1,w:0})}); $('#xrAim').style.top = '60%'; }
+      catch(e){ req = Promise.reject(e); }
+      req.then(h => { hitSource = h; }).catch(() => { $('#xrAim').style.top = '50%'; return sess.requestHitTestSource({space:viewerSpace}).then(h => { hitSource = h; }); });
+    }
+  }
+  if (frame && hitSource){
+    const vp = frame.getViewerPose(refSpace);
+    if (vp){ const tp = vp.transform.position, to = vp.transform.orientation; lastView = {pos:new THREE.Vector3(tp.x,tp.y,tp.z), q:new THREE.Quaternion(to.x,to.y,to.z,to.w)}; }
+    const res = frame.getHitTestResults(hitSource);
+    wallRing.visible = false; floorRing.visible = false; lastHit = null;
+    let wall = null, floor = null;
+    if (lastView){
+      for (const r of res){
+        const pose = r.getPose(refSpace); if (!pose) continue;
+        M.fromArray(pose.transform.matrix); M.decompose(V.pos, V.q, V.s); V.n.set(0,1,0).applyQuaternion(V.q);
+        if (Math.abs(V.n.y) < 0.45){ wall = {pos:V.pos.clone(), n:V.n.clone()}; break; }
+        if (!floor && V.n.y > 0.75 && V.pos.y < lastView.pos.y - 0.5) floor = {pos:V.pos.clone(), m:M.clone()};
+      }
+    }
+    dbg.hits = res.length; dbg.kind = wall ? 'стена' : floor ? 'пол' : res.length ? 'другое' : 'нет';
+    setAim(wall ? 'wall' : floor ? 'floor' : '');
+    if (wall){
+      wall.n.y = 0; wall.n.normalize(); V.cam.copy(lastView.pos).sub(wall.pos); if (wall.n.dot(V.cam) < 0) wall.n.negate();
+      lastHit = {kind:'wall', pos:wall.pos, n:wall.n};
+      V.tmp.copy(wall.pos).addScaledVector(wall.n, 0.006); wallRing.position.copy(V.tmp); V.tmp.add(wall.n); wallRing.lookAt(V.tmp); wallRing.visible = true;
+      if (active){ orient(active, wall.pos, wall.n); setHint('wall', 'Стена найдена. Нажмите на экран, чтобы повесить'); }
+      else setHint('wall-idle', 'Картина висит. «Выше» и «Ниже» двигают её на 5 см');
+    } else if (floor){
+      floorY = floorY === null ? floor.pos.y : floorY*0.9 + floor.pos.y*0.1;
+      floorRing.matrix.copy(floor.m); floorRing.visible = true;
+      const n = lastView.pos.clone().sub(floor.pos); n.y = 0;
+      if (n.lengthSq() > 1e-4){
+        n.normalize(); lastHit = {kind:'floor', pos:floor.pos, n};
+        if (active){ const top = floor.pos.clone(); top.y += hangH; orient(active, top, n); setHint('floor', 'Поставьте прицел на пол у самой стены и нажмите на экран'); }
+        else setHint('floor-idle', 'Картина висит. «Выше» и «Ниже» двигают её на 5 см');
+      }
+    } else {
+      setHint(res.length ? 'other' : 'none', res.length ? 'Наведите прицел на пол у самой стены' : 'Наведите прицел на пол и медленно поводите телефоном');
+    }
+    if (active && !lastHit) active.visible = false;
+    if (lastView && !testCube){
+      testCube = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.15,0.15), new THREE.MeshBasicMaterial({color:0xff00cc}));
+      const f = new THREE.Vector3(0,0,-1).applyQuaternion(lastView.q); testCube.position.copy(lastView.pos).addScaledVector(f, 1); scene.add(testCube);
+    }
+    if (t - infoAt > 500){ infoAt = t; updateXrInfo(); updateDebug(); }
+  }
+  renderer.render(scene, camera);
+  dbg.frames++; dbg.tris = renderer.info.render.triangles;
+}
+function rel(g){
+  const d = g.position.clone().sub(lastView.pos).applyQuaternion(lastView.q.clone().invert());
+  return 'вправо ' + d.x.toFixed(2) + ', вверх ' + d.y.toFixed(2) + ', вперёд ' + (-d.z).toFixed(2) + ' м (до неё ' + d.length().toFixed(2) + ' м)';
+}
+function updateDebug(){
+  const g = active || placed[placed.length-1]; const el = $('#xrDebug'); if (!lastView){ el.textContent = 'нет позиции телефона'; return; }
+  let txt = 'r' + THREE.REVISION + ' · кадров ' + dbg.frames + ' · треуг. ' + dbg.tris + ' · попаданий ' + dbg.hits + ' (' + dbg.kind + ')';
+  txt += '\nкубик: ' + (testCube ? rel(testCube) : 'нет');
+  txt += '\nкартина: ' + (g ? rel(g) + ' · видна ' + (g.visible ? 'да' : 'нет') + ' · висит ' + placed.length : 'нет');
+  txt += '\nпол: ' + (floorY === null ? 'не найден' : 'на ' + (lastView.pos.y - floorY).toFixed(2) + ' м ниже телефона');
+  el.textContent = txt;
+}
+function renderXrStrip(){
+  const s = $('#xrStrip'); if (!s) return; s.textContent = '';
+  const ap = active && active.userData.p;
+  state.paintings.forEach(p => {
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-label', p.name); b.setAttribute('aria-pressed', ap === p);
+    const im = document.createElement('img'); im.src = p.img; im.alt = ''; b.appendChild(im);
+    b.onclick = () => { if (session) startAiming(p); }; s.appendChild(b);
+  });
+}
+async function startAR(){
+  if (!renderer) initThree();
+  const overlay = $('#xrOverlay'); overlay.hidden = false;
+  try {
+    session = await navigator.xr.requestSession('immersive-ar', {requiredFeatures:['hit-test'], optionalFeatures:['dom-overlay'], domOverlay:{root:overlay}});
+  } catch(e){
+    overlay.hidden = true; session = null;
+    toast('Камера не запустилась. Проверьте, что Chrome разрешён доступ к камере и установлены «Сервисы Google Play для AR».'); return;
+  }
+  renderer.xr.setReferenceSpaceType('local');
+  await renderer.xr.setSession(session);
+  refSpace = renderer.xr.getReferenceSpace();
+  viewerSpace = await session.requestReferenceSpace('viewer');
+  hitSource = null; hitPending = false; setAim('');
+  session.addEventListener('select', () => { if (active && active.visible && lastHit) placeActive(); });
+  session.addEventListener('end', onEnd);
+  floorY = null; hintKey = ''; placed = [];
+  renderer.setAnimationLoop(onFrame);
+  const p = cur(); if (p) startAiming(p);
+}
+function onEnd(){
+  renderer.setAnimationLoop(null); hitSource = null; hitPending = false; viewerSpace = null; aimState = null; session = null;
+  if (active) scene.remove(active); placed.forEach(g => scene.remove(g)); active = null; placed = [];
+  if (testCube){ scene.remove(testCube); testCube = null; } dbg.frames = 0;
+  $('#xrOverlay').hidden = true;
+}
+['#xrPanel', '.xr-top'].forEach(q => $(q).addEventListener('beforexrselect', e => e.preventDefault()));
+$('#arStart').addEventListener('click', startAR);
+$('#xrExit').addEventListener('click', () => { if (session) session.end(); });
+$('#xrFront').addEventListener('click', async () => {
+  if (!lastView) return; if (!active){ const p = (placed.length && placed[placed.length-1].userData.p) || cur(); await startAiming(p); }
+  const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(lastView.q); fwd.y = 0; if (fwd.lengthSq() < 1e-4) fwd.set(0,0,-1); fwd.normalize();
+  const pos = lastView.pos.clone().addScaledVector(fwd, 1.5); pos.y = floorY !== null ? floorY + hangH : lastView.pos.y;
+  orient(active, pos, fwd.clone().negate()); placeActive();
+});
+function nudge(d){
+  hangH = Math.max(0.3, Math.min(3, hangH + d));
+  const g = active || placed[placed.length-1]; if (g && !active) g.position.y += d;
+  updateXrInfo();
+}
+$('#xrUp').addEventListener('click', () => nudge(0.05));
+$('#xrDown').addEventListener('click', () => nudge(-0.05));
+$('#xrMove').addEventListener('click', () => {
+  if (active || !placed.length) return; active = placed.pop(); setOpacity(active, .6); hintKey = ''; updateXrInfo(); renderXrStrip();
+});
+$('#xrRemove').addEventListener('click', () => {
+  if (active){ scene.remove(active); active = null; } else if (placed.length){ scene.remove(placed.pop()); }
+  hintKey = ''; updateXrInfo(); renderXrStrip();
+});
+
+/* ---------- boot ---------- */
+if (!restore()){ state.paintings = [samplePainting()]; state.sel = 0; }
+state.paintings.forEach(p => { if (!p.ratio) p.ratio = p.h / p.w; if (!FRAMES[p.frame]) p.frame = 'none'; });
+updateScaleNote(); renderAll(); checkXR();
+})();
+</script>
