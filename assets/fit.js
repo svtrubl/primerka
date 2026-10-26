@@ -507,11 +507,25 @@ function initGL(){
   rx.strokeStyle = '#fff'; rx.lineWidth = 14; rx.beginPath(); rx.arc(64,64,52,0,Math.PI*2); rx.stroke();
   rx.fillStyle = '#fff'; rx.beginPath(); rx.arc(64,64,12,0,Math.PI*2); rx.fill(); ringTex = makeTex(r);
 }
-function makeTex(src){
+function makeTex(src, mip){
   const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  const gl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+  if (mip && !gl2){
+    /* WebGL1 строит уменьшенные копии только для размеров-степеней двойки */
+    const pot = n => Math.min(2048, 2 ** Math.round(Math.log2(n)));
+    const c = document.createElement('canvas'); c.width = pot(src.width); c.height = pot(src.height);
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height); src = c;
+  }
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  if (mip){
+    /* уменьшенные копии и анизотропия убирают рябь мелких мазков издалека и под углом */
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    const an = gl.getExtension('EXT_texture_filter_anisotropic') || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
+    if (an) gl.texParameterf(gl.TEXTURE_2D, an.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(an.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+  } else gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   return t;
 }
@@ -530,8 +544,12 @@ function drawPainting(o, pos, n, op){
   drawMesh(MESH.quad, mMul(base, mTS(0, -oh*0.025, 0.002, ow*1.3, oh*1.3, 1)), shadowTex, [1,1,1,0.5*op], 0);
   gl.depthMask(true);
   if (!p.cutout) drawMesh(MESH.cube, mMul(base, mTS(0, 0, depth/2, ow, oh, depth)), whiteTex, [...hexRgb(f.color || '#2a2a2a'), op], 1);
+  /* паспарту и само изображение лежат на лицевой стороне рамы: рисуем их поверх без проверки глубины,
+     иначе на снимке рама «просвечивает» сквозь картину полосками */
+  const dt = gl.isEnabled(gl.DEPTH_TEST); gl.disable(gl.DEPTH_TEST);
   if (f.mat) drawMesh(MESH.quad, mMul(base, mTS(0, 0, depth + 0.0008, (p.w + 2*f.mat)*cm, (p.h + 2*f.mat)*cm, 1)), whiteTex, [0.957,0.953,0.937,op], 0);
   drawMesh(MESH.quad, mMul(base, mTS(0, 0, depth + 0.0016, p.w*cm, p.h*cm, 1)), o.tex || whiteTex, [1,1,1,op], 0);
+  if (dt) gl.enable(gl.DEPTH_TEST);
 }
 function drawPin(pt, color){
   drawMesh(MESH.quad, mMul(mTS(pt[0], pt[1] + 0.002, pt[2], 1,1,1), mMul(ROT_FLOOR, mTS(0,0,0, .12,.12,1))), ringTex, color, 0);
@@ -568,7 +586,7 @@ function drawScene(clean){
 function texFor(o){
   const src = o.p.img;
   if (texCache.has(src)){ o.tex = texCache.get(src); return; }
-  getImg(src).then(im => { if (!gl) return; const t = texCache.get(src) || makeTex(im); texCache.set(src, t); o.tex = t; }).catch(() => {});
+  getImg(src).then(im => { if (!gl) return; const t = texCache.get(src) || makeTex(im, true); texCache.set(src, t); o.tex = t; }).catch(() => {});
 }
 function setPainting(p){ painting = {p, tex:null}; texFor(painting); updateXrInfo(); renderXrStrip(); }
 function setHint(key, text){ if (key === hintKey) return; hintKey = key; $('#xrHint').textContent = text; }
@@ -654,7 +672,8 @@ function captureFrame(view){
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       const rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
-      gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+      const gl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+      gl.renderbufferStorage(gl.RENDERBUFFER, gl2 ? gl.DEPTH_COMPONENT24 : gl.DEPTH_COMPONENT16, w, h);
       const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
       gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
