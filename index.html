@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Примерка картин</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,6 +25,10 @@
 
 *{box-sizing:border-box}
 [hidden]{display:none!important}
+.chrome-bar{max-width:1120px;margin:0 auto 16px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px}
+.chrome-bar p{margin:0;font-weight:500}
+.chrome-bar .note{font-weight:400;overflow-wrap:anywhere}
+a.btn{text-decoration:none}
 body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
 .app{max-width:1120px;margin:0 auto;display:grid;gap:20px;grid-template-columns:minmax(0,1fr)}
@@ -58,7 +64,7 @@ input[type=number]{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
-button.btn,label.btn{font:500 14px var(--f-body);border-radius:8px;padding:10px 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+button.btn,label.btn,a.btn{font:500 14px var(--f-body);border-radius:8px;padding:10px 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
 button.btn:hover,label.btn:hover{border-color:var(--muted)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.primary:disabled{opacity:.45;cursor:not-allowed}
@@ -127,6 +133,14 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
+<div class="chrome-bar" id="chromeBar" hidden>
+  <p>Примерка через камеру работает только в Chrome.</p>
+  <div class="row">
+    <a class="btn primary" id="chromeLink" href="#">Открыть в Chrome</a>
+    <button class="btn" type="button" id="copyLink">Скопировать адрес</button>
+  </div>
+  <p class="note" id="siteAddr"></p>
+</div>
 <div class="app">
   <div class="col">
     <header>
@@ -145,7 +159,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events
       <h2 class="eyebrow" id="h-ar">Через камеру</h2>
       <button class="btn primary big" id="arStart" disabled>Примерить на стене</button>
       <p class="status" id="arStatus" data-state="">Проверяю, поддерживает ли телефон примерку через камеру…</p>
-      <p class="note">Держите телефон почти прямо. Ниже центра экрана будет прицел: наведите его на пол у самой стены и подождите, пока он станет жёлтым, затем нажмите на экран: картина повиснет над этой точкой, центр будет на высоте 150 см. Потом поправьте её кнопками «Выше» и «Ниже». Если телефон распознал саму стену, прицел станет белым, и картину можно повесить прямо в эту точку.</p>
+      <p class="note">Наведите прицел на плинтус чуть левее места для картины и нажмите на экран, затем на плинтус правее, хотя бы на 30 см. Картина повиснет на стене между точками, центр будет на высоте 150 см. Двигайте её кнопками «Левее», «Правее», «Выше», «Ниже».</p>
     </section>
 
     <section class="panel label" aria-labelledby="h-label">
@@ -427,6 +441,23 @@ $('#saveBtn').addEventListener('click', async () => {
 });
 
 /* ---------- AR (WebXR) ---------- */
+const SITE_URL = 'https://svtrubl.github.io/primerka/';
+function chromeBanner(){
+  const ua = navigator.userAgent;
+  if (!/Android/i.test(ua)) return;
+  let embedded = false; try { embedded = window.top !== window.self; } catch(e){ embedded = true; }
+  const isChrome = /Chrome\/\d/.test(ua) && !/YaBrowser|SamsungBrowser|EdgA|OPR\/|Firefox|MiuiBrowser|HeyTapBrowser|UCBrowser|Vivaldi|DuckDuckGo|; wv\)|Version\/\d/.test(ua);
+  if (isChrome && !embedded) return;
+  const url = /github\.io$/.test(location.hostname) ? location.href.split('#')[0] : SITE_URL;
+  const noScheme = url.replace(/^https?:\/\//, '');
+  $('#chromeLink').href = 'intent://' + noScheme + '#Intent;scheme=https;package=com.android.chrome;end';
+  $('#siteAddr').textContent = 'Если кнопка не сработала, откройте Chrome и вставьте адрес: ' + url;
+  $('#copyLink').onclick = () => {
+    const done = () => toast('Адрес скопирован. Вставьте его в Chrome.');
+    try { navigator.clipboard.writeText(url).then(done, () => toast(url)); } catch(e){ toast(url); }
+  };
+  $('#chromeBar').hidden = false;
+}
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 async function checkXR(){
   const st = $('#arStatus'), btn = $('#arStart');
@@ -693,6 +724,6 @@ $('#xrReset').addEventListener('click', () => { resetPoints(); flash('Точки
 /* ---------- boot ---------- */
 if (!restore()){ state.paintings = [samplePainting()]; state.sel = 0; }
 state.paintings.forEach(p => { if (!p.ratio) p.ratio = p.h / p.w; if (!FRAMES[p.frame]) p.frame = 'none'; });
-updateScaleNote(); renderAll(); checkXR();
+updateScaleNote(); renderAll(); checkXR(); chromeBanner();
 })();
 </script>
